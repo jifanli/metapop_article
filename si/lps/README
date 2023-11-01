@@ -1,0 +1,4 @@
+# lps.csv was obtained by running lps_simu.m
+
+# Both M.mat and pop.mat are our modified data, where we reduced the number of 
+# cities from 375 to 373 and made corrections to city names and population.

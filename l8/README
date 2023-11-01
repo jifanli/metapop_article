@@ -1,0 +1,9 @@
+# l8 continues l7
+# l1 uses li23
+
+# l7 made solid progress, moving 4 units of likelihood
+# with fairly low Monte Carlo variability, 
+# so it is natural to see if one can just
+# keep going.
+
+# but the loglik of l8 (-9088.229) is even lower than l7 (-9086.918)

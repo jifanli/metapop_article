@@ -1,0 +1,546 @@
+\documentclass[12pt]{article}\usepackage[]{graphicx}\usepackage[]{xcolor}
+% maxwidth is the original width if it is less than linewidth
+% otherwise use linewidth (to make sure the graphics do not exceed the margin)
+\makeatletter
+\def\maxwidth{ %
+  \ifdim\Gin@nat@width>\linewidth
+    \linewidth
+  \else
+    \Gin@nat@width
+  \fi
+}
+\makeatother
+
+\definecolor{fgcolor}{rgb}{0.345, 0.345, 0.345}
+\newcommand{\hlnum}[1]{\textcolor[rgb]{0.686,0.059,0.569}{#1}}%
+\newcommand{\hlstr}[1]{\textcolor[rgb]{0.192,0.494,0.8}{#1}}%
+\newcommand{\hlcom}[1]{\textcolor[rgb]{0.678,0.584,0.686}{\textit{#1}}}%
+\newcommand{\hlopt}[1]{\textcolor[rgb]{0,0,0}{#1}}%
+\newcommand{\hlstd}[1]{\textcolor[rgb]{0.345,0.345,0.345}{#1}}%
+\newcommand{\hlkwa}[1]{\textcolor[rgb]{0.161,0.373,0.58}{\textbf{#1}}}%
+\newcommand{\hlkwb}[1]{\textcolor[rgb]{0.69,0.353,0.396}{#1}}%
+\newcommand{\hlkwc}[1]{\textcolor[rgb]{0.333,0.667,0.333}{#1}}%
+\newcommand{\hlkwd}[1]{\textcolor[rgb]{0.737,0.353,0.396}{\textbf{#1}}}%
+\let\hlipl\hlkwb
+
+\usepackage{framed}
+\makeatletter
+\newenvironment{kframe}{%
+ \def\at@end@of@kframe{}%
+ \ifinner\ifhmode%
+  \def\at@end@of@kframe{\end{minipage}}%
+  \begin{minipage}{\columnwidth}%
+ \fi\fi%
+ \def\FrameCommand##1{\hskip\@totalleftmargin \hskip-\fboxsep
+ \colorbox{shadecolor}{##1}\hskip-\fboxsep
+     % There is no \\@totalrightmargin, so:
+     \hskip-\linewidth \hskip-\@totalleftmargin \hskip\columnwidth}%
+ \MakeFramed {\advance\hsize-\width
+   \@totalleftmargin\z@ \linewidth\hsize
+   \@setminipage}}%
+ {\par\unskip\endMakeFramed%
+ \at@end@of@kframe}
+\makeatother
+
+\definecolor{shadecolor}{rgb}{.97, .97, .97}
+\definecolor{messagecolor}{rgb}{0, 0, 0}
+\definecolor{warningcolor}{rgb}{1, 0, 1}
+\definecolor{errorcolor}{rgb}{1, 0, 0}
+\newenvironment{knitrout}{}{} % an empty environment to be redefined in TeX
+
+\usepackage{alltt}
+
+
+
+
+\newcommand\LiMobility{M$_1$}
+\newcommand\LiParams{M$_2$}
+\newcommand\BenchmarkIID{M$_3$}
+\newcommand\BenchmarkAR{M$_4$}
+\newcommand\RevisedModelUnconstrained{M$_5$}
+\newcommand\RevisedModelConstrained{M$_6$}
+
+\newcommand\Rzero{\mathcal{R}_0}
+\newcommand\before{\mathrm{be}}
+\newcommand\after{\mathrm{af}}
+\newcommand\code[1]{\texttt{#1}}
+
+\newcommand\suppSecEnkf{S4}
+\newcommand\suppSecOurModel{S1}
+\newcommand\suppSecMobility{S1.2}
+\newcommand\suppSecLiModel{S1.3}
+\newcommand\suppSecBenchmark{S2}
+\newcommand\suppSecIBPF{S3}
+\newcommand\suppSecEnKF{S4}
+\newcommand\suppSecUnconstrained{S5} %% profiles for the unconstrained li23 model
+\newcommand\suppSecInference{S6} %% now profile likelihood CIs
+\newcommand\suppSecResiduals{S7} %% now anomaly analysis
+\newcommand\suppSecMetapoppkg{S8}
+
+
+\newcommand\suppFigSim{S2}
+\newcommand\suppTableResults{S1}
+\newcommand\suppFigFilterComparison{S9}
+
+\newcommand\stdError[1]{}
+%\newcommand\stdError[1]{{\small(#1)}} 
+
+\newcommand\includeRates[1]{}
+
+\usepackage[sort&compress,numbers]{natbib}
+\usepackage{times}
+\usepackage{url}
+\usepackage{enumitem}
+\usepackage[hidelinks,colorlinks=true,linkcolor=blue,citecolor=blue]{hyperref}
+\usepackage{tikz}
+
+\topmargin 0.0cm
+\oddsidemargin 0.2cm
+\textwidth 16cm 
+\textheight 21cm
+\footskip 1.0cm
+\usepackage{xcolor}
+%orange for EI
+\definecolor{orange}{rgb}{1,0.5,0}
+\newcommand\ei[2]{\sout{#1} \textcolor{orange}{#2}}
+\newcommand\eic[1]{\textcolor{orange}{[#1]}}
+%green for PN
+\definecolor{green}{rgb}{0,0.5,0}
+\newcommand\pn[2]{\sout{#1} \textcolor{green}{#2}}
+\newcommand\pnc[1]{\textcolor{green}{[#1]}}
+%purple for JF
+\definecolor{purple}{rgb}{0.5,0,1}
+\newcommand\jf[2]{\sout{#1} \textcolor{purple}{#2}}
+\newcommand\jfc[1]{\textcolor{purple}{[#1]}}
+%teal for TODO
+\definecolor{teal}{rgb}{0,0.5,0.8}
+\newcommand\todo[1]{\textcolor{teal}{[TO DO? #1]}}
+
+\newenvironment{sciabstract}{%
+\begin{quote} \bf}
+{\end{quote}}
+
+\title{Machine Learning for Mechanistic Models of Metapopulation Dynamics}
+
+\author
+{Jifan Li,$^{1}$ Edward L. Ionides,$^{2\ast}$ Aaron A. King$^3$, Mercedes Pascual$^4$, Ning Ning$^{1\ast}$\\
+\\
+\normalsize{$^{1}$Department of Statistics, Texas A\&M University}
+\\
+\normalsize{$^{2}$Department of Statistics, University of Michigan}
+\\
+\normalsize{$^{3}$Department of Ecology \& Evolutionary Biology, University of Michigan}
+\\
+\normalsize{$^{4}$Department of Environmental Studies, New York University}
+\\
+\normalsize{$^\ast$To whom correspondence should be addressed; E-mail: ionides@umich.edu, patning@tamu.edu}
+}
+
+\date{}
+
+%%%%%%%%%%%%%%%%% END OF PREAMBLE %%%%%%%%%%%%%%%%
+
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\begin{document} 
+
+
+% Double-space the manuscript.
+%\baselineskip24pt
+
+\maketitle 
+
+\begin{abstract}
+Mathematical models in ecology and epidemiology demand data fidelity for reliable knowledge and sound policy. Metapopulation systems, involving sub-populations across various locations, pose technical challenges in statistical inference due to nonlinear, stochastic interactions. These challenges can divert attention from core scientific inquiries concerning the link between mathematical models and scientific understanding. Progress in statistically efficient simulation-based inference for partially observed stochastic dynamic systems has enabled the development of statistically rigorous approaches to the analysis of nonlinear but low-dimensional systems. Recently, an algorithm has been developed which enables comparable inference for higher-dimensional models arising in metapopulation systems. The COVID-19 pandemic provides a situation where mathematical models and their policy implications were widely visible, and we revisit an influential metapopulation model and dataset used to inform basic epidemiological understanding early in the pandemic. Our methods support self-critical data analysis, enabling us to identify and address weaknesses, and leading to a new model with substantially improved statistical fit and parameter identifiability. Our findings reveal that the January 23, 2020 lockdown in China was more effective than previously thought. We also discuss recommended statistical analysis standards for future metapopulation system modeling.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+Biological populations may be structured into a collection of densely-populated communities separated by sparsely populated regions.
+The communities, which may be cities in a human context, comprise a metapopulation.
+Motivation for metapopulation modeling arises when some essential feature of the population dynamics cannot be understood from looking at a single location.
+Dynamics of persistence through local extinctions and reintroductions have been extensively studied in ecology \cite{hanski98,mackenzie09}.
+In epidemiology, metapopulation dynamics can be a barrier to the eradication of a pathogen, and may determine the successful invasion of a new pathogen or a new strain of an existing pathogen \cite{metcalf21}.
+In other situations, spatiotemporal dynamics may be an unavoidable component of the system under study without being the focus of the investigation \cite{zhang22,wheeler23}.
+
+
+A recent growth of research in metapopulation dynamics, developing mathematical models and fitting them to spatiotemporal data, has been driven partly by the COVID-19 pandemic \cite{li20,wu20,wang22,prieto22,cascante-vega22,pizzuti20,alleman21,yang21,engebretsen23} and in part by methodological advances.
+Developing dynamic models with both scientific and statistical justification was a longstanding open problem for even a single community, until the start of this millenium \cite{bjornstad01}.
+Over the past two decades, new algorithms \cite{ionides06,toni09,andrieu10,ionides15} and software \cite{king16,kristensen16,devalpine17} together with ever-increasing computational resources, have enabled routine inference for low-dimensional nonlinear partially observed stochastic dynamic systems.
+However, fundamental algorithmic scalability issues known as the ``curse of dimensionality'' lead to difficulties with the high-dimensional systems arising in metapopulation inference.
+These issues are clearest for Monte Carlo techniques based on importance sampling \cite{bengtsson08} but are also evident in the need for variational approximations for large Monte Carlo Markov Chain (MCMC) calculations \cite{blei17}. 
+The quest for numerical approximations suitable for metapopulation models of scientific interest has excited the development of various methodological approaches.
+Nevertheless, limitations have persisted in the capability to carry out flexible model-based inference and rigorous model criticism.
+Thus, data analysis for metapopulation models has lagged behind low-dimensional time series analysis of biological systems.
+Recent developments enable this gap to be closed, as we demonstrate via a reanalysis of COVID-19, viewed from the context of the ability to drawm evidence-based scientific conclusions about the dynamics of the emerging pandemic in January and February 2020.
+
+\section{Review of metapopulation models and inference methods}
+\label{sec:review}
+
+Biological systems are characterized by nonlinear stochastic dynamics together with incomplete and noisy measurements  \cite{bjornstad01}.
+We therefore focus on the class of partially observed Markov process (POMP) models \cite{breto09}, acknowledging that deterministic models can be conceptually useful but are problematic as statistical explanations of noisy systems \cite{king15,wheeler23}.
+The Markovian property asserts that the dynamic process has no memory conditional on its current state, which is algorithmically convenient while being scientifically nonrestrictive since we can choose what to include in the state.
+Metapopulation models consider a multivariate system state at each location and so we require methods tailored for high-dimensional POMP models.
+Simplifications arise if models and data are limited to binary presence-absence, or a small discrete set of values at each location \cite{mackenzie09}, but we focus on situations where abundance data are available, such as case reports for infectious diseases.
+
+A natural place to look for statistical methodology applicable to metapopulation models is among the techniques developed for inferring population dynamics at a single location, reviewed by \cite{funk20,auger-methe21}.
+Commonly implemented approaches for POMP models can be categorized as  (i) MCMC; (ii) matching summary statistics between data and simulations; (iii)  linearization;   (iv) particle filters (sequential Monte Carlo). For low-dimensional systems, MCMC is generally possible and have the attractive feature of statistically efficient use of data, i.e., accessing the likelihood function for Bayesian or likelihood-based inference, with approximation resulting only from finite Monte Carlo effort.
+In principle, MCMC techniques enable Bayesian inference or maximum likelihood via expectation-maximization algorithms \cite{cappe05}.
+For high-dimensional systems, scalability considerations demand further approximations. 
+In practice, successful MCMC for metapopulation models requires careful model-specific algorithm development \cite{whitehouse23}.
+Another approach to fitting arbitrary metapopulation models involved matching summary statistics of simulations to the corresponding data statistic.
+In the context of Bayesian inference this is called Approximate Bayesian Computing \cite{conlan12}.
+However, informative, low-dimensional summary statistics can be hard to construct even for low-dimensional nonlinear systems \cite{fasiolo16,shrestha11}.
+
+Population dynamics may be approximately linear on a log scale, and this has been used to develop linearization methods for epidemiological time series analysis \cite{bjornstad02} that have been extended to metapopulation analysis \cite{xia04}.
+This provides a numerically convenient set of tools, but requires scientists to work within a limited class of models. The ensemble Kalman filter (EnKF) developed in the context of massive geophysical model, combines an ensemble representation with a computationally efficient update rule inspired by the scalable linear Kalman filter, providing an approach with excellent scalability \cite{evensen09book,evensen22}.
+For biological systems, EnKF was first demonstrated as a computationally convenient tool for compartment models at a single location \cite{shaman12,yang14}.
+Subsequently, it has been applied for epidemiological metapopulation inference \cite{li20,kramer20}.
+However, the linearization in the EnKF filter update rule can be problematic for highly nonlinear systems \cite{evensen22}.
+Further, a linear update rule is not appropriate for small, discrete populations unless EnKF is embedded within a MCMC algorithm \cite{katzfuss19}.
+
+Particle filters, which are applicable to a flexible class of models for low-dimensional nonlinear systems \cite{breto09,king16} suffer acutely from the ``curse of dimensionality'' \cite{bengtsson08}.
+In contrast, block particle filter (BPF) methods achieve scalability by updating particles through localized resampling, rather than employing the linear update of EnKF \cite{rebeschini15}.
+It is an empirical question which of these approximations is more successful on metapopulation models,  with prior evidence favoring BPF \cite{ionides21}.
+In this paper, we not only aim to compare these methods in the context of metapopulation modeling but importantly also we reveal issues of model assessment when fitting complicated models to large datasets.
+We introduce a model diagnosis procedure to mitigate the risk of selecting an inappropriate model, an essential step in informing public policy decisions.
+
+
+\section{Metapopulation analysis of COVID-19 spread in China}
+\label{sec:covid}
+Models are an irreplaceable tool to inform public policy, despite delicate issues in their implementation and interpretation \cite{mccabe21,saltelli20}.
+Some of the difficulties are operational, others are conceptual.
+Operationally, we seek to fit complex models using statistically valid, reproducible and transparent methods.
+Conceptual difficulties arise when drawing causal conclusions from fitting models to observational data, giving rise to opportunities for incorrect conclusions due to missing variables or other forms of model misspecification.
+A strength of metapopulation modeling is that the model can be build upon established scientific knowledge, which may give some protection against gross forms of model misspecification (for example, asserting the existence of latent dynamic variables which simply do not exist).
+A model assimilated to data guarantees that assumptions have been framed in a way consistent with certain facts, and evidence for predictive skill can support the value of the model construction.
+Indeed, it can be practically impossible to make sense of the nonlinear stochastic interactions driving biological dynamics without representing them via a model \cite{mccabe21,lofgren14}.
+We therefore seek to harness the power of models while assessing, acknowledging and minimizing their weaknesses.
+
+As an example, we reconsider the influential analysis of COVID-19 from early in the pandemic by Li et al. \cite{li20}, that provided estimates of transmission parameters and the effect of lockdown using the limited data available at the time.
+Other teams have fitted models to address similar questions \cite{kramer20-science,yang21,brett23} but the study by \cite{li20} is distinctive for fitting a stochastic mechanistic metapopulation model to extensive spatiotemporal data for 373 Chinese cities.
+The results were published in May, 2020, based on reported cases from January 10 to February 8 of that year.
+The state-of-the-art spatiotemporal analysis was possible on an urgent timescale because the team of researchers had developed their methodology in a sequence of previous situations \cite{shaman12,yang14,yang15,pei18}.
+The paper is written to a high standard of reproducibility, and the main results are strengthened by various supporting analyses in an extensive supplement.
+While examining the points mentioned above, we have identified various weaknesses that could have been mitigated by adhering to the aforementioned recommendations.
+Our goal is not to criticize any specific paper, but rather to build on the timely analysis of \cite{li20} to demonstrate how recently developed techniques provide possibilities to carry out superior data analysis in future.
+
+\usetikzlibrary{positioning}
+\usetikzlibrary {arrows.meta}
+\usetikzlibrary{shapes.geometric}
+
+\begin{figure}
+\begin{center}
+%%%%% SEAIR diagram
+\resizebox{11cm}{!}{
+\begin{tikzpicture}[
+  square/.style={rectangle, draw=black, minimum width=0.8cm, minimum height=0.8cm, rounded corners=.1cm, fill=blue!8},
+  travel/.style={circle, draw=black, minimum width=0.85cm, minimum height=0.8cm, fill=green!8},
+  report/.style={shape=regular polygon, regular polygon sides=8, draw, fill=red!8,minimum size=0.9cm,inner sep=0cm},
+  bendy/.style={bend left=25},
+  >/.style={shorten >=0.25mm}, % redefine arrow to stop short of node
+  >/.tip={Stealth[length=1.5mm,width=1.5mm]} % redefine arrow style
+]
+\tikzset{>={}}; % this is needed to implement the arrow redefinition
+
+\node (S) at (-0.5,0) [square] {S$_u$};
+\node (E) at (2,0) [square] {E$_u$};
+\node (A) at (4.5,0) [square] {A$_u$};
+\node (I) at (4.5,-1.75) [square] {I$_u$};
+\node (R) at (7,0) [square] {R$_u$};
+
+\node (T1) at (-0.5,1.75) [travel] {T};
+\node (T2) at (2,1.75) [travel] {T};
+\node (T3) at (4.5,1.75) [travel] {T};
+
+\node (Ca) at (4.5,-3.5) [report] {C$^a_u$};
+\node (Cb) at (7,-3.5) [report] {C$^b_u$};
+\node (C) at (9.5,-3.5) [report] {C$_u$};
+
+\node (V1) at (2.5,-1.75) {};
+\node (V2) at (3,-3.5) {};
+\draw [->] (E) -- (Ca -| V2) -- (Ca);
+\draw [->] (I -| V1) -- (I);
+
+\draw [->] (S) -- (E);
+\draw [->] (A) -- (R);
+
+\draw [->] (Ca) -- (Cb);
+\draw [->] (Cb) -- (C);
+
+\draw [->] (I.east) -- (R);
+\draw [->] (E) -- (A);
+
+\draw [->, bendy] (S) to (T1);
+\draw [->, bendy] (T1) to (S);
+
+\draw [->, bendy] (E) to (T2);
+\draw [->, bendy] (T2) to (E);
+
+\draw [->, bendy] (A) to (T3);
+\draw [->, bendy] (T3) to (A);
+
+\end{tikzpicture}
+}
+\end{center}
+\vspace{-5mm}
+\caption{A flow diagram for the SEAIR metapopulation model. Each individual in city $u$ is a member of exactly one of the square blue compartments. Individuals entering the reportable infectious compartment, $\mathrm{I}_u$ for city $u$, are simultaneously included in the delayed reporting process compartment, $\mathrm{C^a_u}$. Upon arrival at the final reporting compartment, $\mathrm{C}_u$, the individual is included in the case report for city $u$. Movement of individuals between cities occurs by transport to and from a transport compartment, $\mathrm{T}$. Movement is modeled only for susceptible, exposed, and undetected infections.}\label{fig:flow_diagram}
+\end{figure}
+
+We consider metapopulation models where the units are 373 provincial cities in China (meaning cities with administrative responsibility for an entire region) and the data are daily reported COVID-19 cases. 
+COVID-19 dynamics are represented by an Susceptible-Exposed-Asymptomatic-Infectious-Recovered (SEAIR) epidemic spreading model. 
+Questions of urgent interest early in the pandemic include the relative transmissibility of reported to unreported cases, the fraction of unreported cases, and the effect on transmission of movement restrictions imposed on and around January 23 \cite{li20}.
+The model structure is illustrated by the flow diagram in Fig.~\ref{fig:flow_diagram}.
+We consider different model implementations within this structure, with full model specifications provided by the equations and parameter values in Supplementary Sec.~\suppSecOurModel.
+
+Our starting point is model {\LiMobility} which is based on the model of \cite{li20}, with specific differences discussed in Supplementary Sec.~\suppSecLiModel.
+We consider the full dataset, from January 10 to February 8, with transmission parameters re-estimated following the lockdown on January 23; these correspond to the periods~1 (January 10 to January 22) and 3 (January 24 to February 8) of \cite{li20}.
+Simulations from {\LiMobility}, using the parameters of \citep{li20}, closely match simulations from the code provided by \cite{li20} (Supplementary Sec.~\suppSecLiModel).
+The minor differences between the results of {\LiMobility} and \citep{li20} enable us to place their model within the general metapopulation framework described by \citep{ionides21}.
+Inspection of the mobility data reveals that some small cities have no recorded incoming travelers, and therefore no possibility within the model of a SARS-CoV2 introduction (Supplementary Sec.~\suppSecMobility).
+This minor limitation formally results in a likelihood of zero for the simulation model (i.e., it is impossible for the simulation model to reproduce the observed spatiotemporal dataset), and hence a log-likelihood of $-\infty$.
+
+
+
+
+
+
+
+
+
+\begin{table}[ht]
+\small
+\begin{tabular}{c|rr|l}
+Model & loglik & df & description
+\\
+\hline
+{\LiMobility} &
+  $-\infty$ & 10 &
+  SEAIR model using the parameter values and mobility data of \cite{li20}
+\\
+{\LiParams} &
+  -14240.5\stdError{272.4}& 10 &
+  Adjusted mobility and measurement in {\LiMobility}
+\\
+{\BenchmarkIID} &
+  -11257.9  & 374 &
+  Independent identically distributed negative binomial
+\\
+{\BenchmarkAR} &
+ -10825.3  & 375 &
+  Autoregressive negative binomial
+\\
+{\RevisedModelUnconstrained} &
+  -9088.2\stdError{3.4}&
+  12 &
+  Adding overdispersed dynamics to {\LiParams} and refitting
+\\
+{\RevisedModelConstrained} &
+  -9116.5\stdError{10.1}&
+  10 &
+  Latent and infectious durations unchanged by lockdown in {\RevisedModelUnconstrained}.
+\\
+
+\hline
+\end{tabular}
+\caption{Model comparisons by log-likelihood, evaluated by a block particle filter. The degrees of freedom (df) is the number of estimated parameters. 
+}
+\label{tab:loglik}
+\end{table}
+
+We avoided the issue of model {\LiMobility} by adding some additional mobility based on a gravity movement model, as described in Supplementary Sec.~\suppSecMobility, giving rise to model~{\LiParams}.
+We implemented an additional adjustment between models {\LiMobility} and {\LiParams} to align the measurement model with the ensemble Kalman filter (EnKF) inference method presented by \cite{li20}.
+That EnKF implementation involved specifying a quanitity called the observation error variance, defined as a function of the observed cases, to quantify the uncertainty in the measurements.
+Within the POMP specification, the measurement variance can depend on the latent state but not directly on the observed data, neverthless we modified the measurement model for~{\LiParams}to have equivalen scaling to the choice of \citep{li20}.
+
+Based on a comparison of various nonlinear spatiotemporal filters (Supplemtary Fig.~\suppFigFilterComparison) we evaluated the log-likelihood for {\LiParams} using a block particle filter, reported in Table~\ref{tab:loglik}. To account for model overfitting, the number of estimated parameters can be subtracted from the log-likelihood to obtain a comparison equivalent to Akaike's Information Criterion (AIC) \citep{burnham02}.
+When the difference in log-likelihood is large compared to the difference in degrees of freedom, the ordering of statistical goodness-of-fit is clear without presenting formal statistical hypothesis tests.
+
+To find out whether this log-likelihood value suggests that the model is satisfactory, we compare it with two simple statistical models:
+{\BenchmarkIID} simply models the daily case report for each city as an independent identically distributed (IID) negative binomial random variable; 
+{\BenchmarkAR} adds an autoregressive component to {\BenchmarkIID} (see Supplemetary Sec.~\suppSecBenchmark).
+We see from Table~\ref{tab:loglik} that both {\BenchmarkIID} and {\BenchmarkAR} outperform {\LiParams} by many units of log-likelihood.
+Likelihood can properly be compared between different models for the same data, with statistical uncertainty in log-likelihood differences arising on the unit scale \citep{pawitan01}.
+When the fit of a mechanistic model is inferior to a simple statistical model, we learn that the mechanistic model has room for improvement as a description of the data, but we do not immediately learn what the deficiency is.
+The development of methods for formal statistical fitting of mechanistic models has led to increased understanding of the importance of modeling variability in the dynamics \cite{he10,stocks20,whitehouse23}.
+We therefore hypothesized that the fit of {\LiParams} could be improved by permitting additional dynamic stochasticity.
+
+A standard way to convert a deterministic model, constructed as a system of ordinary differential equations, into a stochastic model is to reinterpret the rates of the deterministic system as rates of a Markov chain \citep{keeling09}.
+This places limits on the mean-variance relationship of the resulting stochastic model \citep{breto11}.
+Models allowing greater variability that permitted by this construction are said to be over-dispersed.
+We added multiplicative white noise to the transmission rate, following the approach of \citep{breto09,he10}, giving rise to model~{\RevisedModelUnconstrained}.
+We fitted the model using an iterated block particle filter to maximize the likelihood \citep{ionides22,ning23}.
+Table~1 shows that this model outperforms simple statistical benchmarks, obtaining a competitive likelihood with relatively few parameters.
+From a statistical perspective, {\RevisedModelUnconstrained} is therefore an adequate statistical description of the data.
+However, some parameters of {\RevisedModelUnconstrained} were weakly identified by the data, especially in the pre-lockdown time interval within which there were relatively few reported cases (Supplementary Sec.~\suppSecUnconstrained).
+When the evidence about the model parameters in the data is weak, the ambiguity may be resolved by other, unmodeled and poorly understood, aspects of the data.
+This risks leading to undesirable situations where substantial conclusions about questions of interest could be driven by the weaknesses of the model rather than its strengths.
+
+In Supplementary Sec.~\suppSecUnconstrained, we show how the flexibility of {\RevisedModelUnconstrained} can be used to obtain a high likelihood via an unplausibly long estimated duration of infection during the pre-lockdown period, with the estimate suddenly reducing after lockdown.
+ {\RevisedModelConstrained} resolves this issue by constraining the latent and infectious periods to be the same before and after lockdown. 
+We maximized the block particle filter likelihood using an iterated filtering algorithm \citep{ionides15} adapted to the structure of a block particle filter \citep{ionides22}.
+The block filter approximation has also proven helpful for spatiotemporal inference when using alternatives to particle filtering and alternatives to maximization by iterated filtering \cite{whitehouse23}.
+In the current context, the block particle filter was found to be more effective than a test suite of alternative filters including the ensemble Kalman filter (Supplementary Fig.~\suppFigFilterComparison).
+Calculating the log-likelihood for each model in Table~\ref{tab:loglik} requires extensive computation to produce a single number which contains essentially all the information about the statistical fit of the model.
+However, additional work is required to understand what characteristics of the models and data causes the differences in these numbers, and the practical consequences of the numerical results.
+
+All parameter estimates are reported in Table~\suppTableResults.
+Here, we discuss the estimated basic reproductive number (i.e., the expected number of secondary infections from one index case in a fully susceptible population), denoted by $\Rzero^{\before}$ and $\Rzero^{\after}$ before and after the January 23rd lockdown.
+Our estimates for model {\RevisedModelConstrained}, are $\Rzero^{\before}=3.51$ with confidence interval (CI) (3.31,3.72) and $\Rzero^{\after}=0.70$  with CI (0.65,0.77), where the estimates and their associated 95\% CIs obtained by profile likelihood (Supplementary Sec.~\suppSecInference).
+This implies that the Chinese government non-pharmaceutical interventions instituted on and around January 23 reduced $\Rzero$ by a factor of $5.0$.
+By contrast, the estimates of \cite{li20} are $\widetilde\Rzero^{\before}=2.38$  with CI $(2.03,2.77)$ and $\widetilde\Rzero^{\after}=0.98$  with CI $(0.83,1.16)$, implying reduction by a factor of $2.4$.
+For comparison, interventions implemented across a panel of 41 countries (34 European) were estimated to reduce $\Rzero$ by a factor of $4.3$  with CI $(2.9,6.7)$ \citep{brauner21}.
+Our estimate for $\Rzero$ before lockdown is toward the high end of comparable estimates, reviewed by \citep{park20-jcm}.
+An alternative metaopopulation analysis of the pre-lockdown China data, with a deterministic transmission model, obtained an $\Rzero$ estimate of 3.11  with CI  (2.39,4.13) \citep{read21}.
+
+
+Our model inherits the property of \citep{li20} that infections arising during the pre-lockdown period will generally be reported during the lockdown, due to the reporting delay modeled as a distributed delay with a mean of 9 days pre-lockdown and 6 days post-lockdown.
+Thus, the model is permitted to explain the data by inferring rapid, unreported spread prior to January 23.
+Despite this shared constraint on the form of the model, conclusions of our analysis differ from \cite{li20}.
+Beyond the estimates of $\Rzero$, a notable difference is that we find the estimated transmissibility of observed cases is close to that of unobserved cases, especially before lockdown (Table~S1).
+
+Not all models are equal, and we have demonstrated an approach which evaluates the extent to which the postulated models statistically explain the observed data. 
+Our analysis cannot disprove the possibility of an alternative model which explains the data even better via an alternative model specification, perhaps leading to alternative conclusions.
+Indeed, our methods are designed to facilitate others to develop and demostrate superiority to our own analysis when such advances are available.
+
+A mechanistic model, whose likelihood is competitive with statistical benchmarks, is anticipated to have simulations that are qualitatively comparable to the data.
+Since the model specification is inevitably imperfect, and is accounted for in the model fitting by noise processes, we expect simulations to have somewhat more stochastic variation than the data.
+By contrast, models with insufficient flexibility to explain the data may give rise to simulations with too little stochasticity.
+Comparing model {\LiParams} with {\RevisedModelUnconstrained} demonstrates this (Supplementary Fig.~\suppFigSim).
+Fitted models having simulations with implausibly little variability lead to claims of excessive confidence about estimated parameters.
+This may be clearest from a parametric bootstrap approach where CIs are constructed by re-estimating parameters using artificial datasets simulated from the fitted model.
+However, it is also true for classical CI and Bayesian credible interval constructions.
+Thus, CIs from mechanistic models, which outperform statistical benchmarks, are anticipated to be conservative, whereas CIs from models with insufficient variability to explain the data are generally anti-conservative.
+Requiring model likelihoods to be comparable to statistical benchmarks therefore improves the credibility of uncertainty intervals as well as improving the accuracy of point estimates.
+
+\section{Discussion}
+\label{sec:conclusion}
+
+Advances in statistical methodology will drive an increasing trend in the number of spatiotemporal models fitted to epidemiological data.
+The challenge of fitting intricate nonlinear models to extensive datasets makes it difficult for researchers to evaluate the limitations of their models and methods.
+Readers also can struggle to determine whether the proposed model has been adequately tested.
+It is therefore advisable to incorporate benchmarks for evaluating model performance in comparison to relatively simple statistical models \citep{he10}.
+This approach helps determine whether complex models provide a satisfactory level of explanatory power.
+In the first instance, these benchmarks can be applied to the entire dataset; subsequent analysis can focus on dissecting the contributions from various subsets of the data to gain a comprehensive understanding of which parts of the data drive the overall assessment.
+
+Likelihood-based inference via particle filters has been considered inaccessible for metapopulation models due to the ``curse of dimensionality'' \cite{bengtsson08}.
+However, block particle filter methods can be effective on metapopulation models, as demonstrated in this paper and previously \cite{ionides21,ning23,wheeler23}.
+All high-dimensional nonlinear filters entail numerical approximation, and these can be assessed by comparing predictive skill (i.e., the estimated log-likelihood) between different filters.
+The ensemble Kalman filter provides a suitable point of comparison, since it has excellent scalability properties, modest capability to handle nonlinearities, and has been demonstrated on various epidemiological systems \cite{shaman12,yang14,yang15,pei18,yang21,kramer20-plos-cb,cascante-vega22}.
+
+Software environments are critical for providing data analysis that is not only reproducible but also readily extendable.
+Scientists developing a data analysis should develop an environment that empowers them to explore their own models and data, and then they should share this environment as part of the publication process.
+In practice, this involves encapsulating data analysis within a software package  that immerses the user in a documented environment where the models, methods and data used for the article can be readily be experimented with.
+Trustworthy data analysis should be supported by unit testing and documentation, and the quality of this support should be one of the considerations in evaluation of the data analysis.
+In other words, the article presenting the research should be part of a compendium \cite{gentleman07}.
+The compendium for this article is at \url{https://github.com:jifanli/metapop_article}, with software provided as an R package.
+
+Our research demonstrates that techniques proven effective in low-dimensional systems, such as population dynamics at one or two locations, can be extended to address larger metapopulation systems. This extension allows us to leverage well-established best practices from time series analysis, leading to a statistically principled approach. This approach enables us to identify and rectify model weaknesses that might otherwise remain undetected. Failure to address these weaknesses can lead to issues of irreproducibility and the provision of suboptimal policy recommendations when developing models for complex dynamic systems \cite{saltelli20,ioannidis22}.
+Principles of good data analysis for population dynamics are presumably similar to general principles of data science \cite{yu20} but require some adaptation to the specific situation.
+Here, we build on \cite{saltelli20,ioannidis22,yu20}, by demonstrating the feasibility and desirability of metapopulation analysis meeting the specific set of criteria outlined below:
+
+\begin{enumerate}
+
+\item \label{point:i} {\bf Likelihood-based statistical inference}. A model, in conjunction with data, defines a likelihood function that quantifies the goodness of fit of the model and the data for each parameter value.
+For mechanistic models, it is usually impossible to write down the likelihood explicitly, but it still exists implicitly.
+Modern methods for implicit dynamic models permit evaluation and maximization of an implicit likelihood for metapopulation models \citep{ning23,ionides22,whitehouse23}.
+Such methods extract all available information in the data about model parameters \cite{pawitan01}.
+Log-likelihood is also a proper scoring rule for comparing probabilistic forecasts \cite{gneiting07} and therefore provides a sensitive objective tool for model selection and identification of model misspecification.
+Whereas cross-validation and out-of-sample fit are standard benchmarks in machine learning settings \cite{yu20}, likelihood is better suited to situations with relatively small, spatiotemporally structured datasets.
+
+\item \label{point:ii} {\bf Statistical benchmarks}.
+The likelihood of a mechanistic model should be compared with that of a non-mechanistic statistical model, known as a benchmark \cite{he10}. 
+A mechanistic model that statistically fits the data substantially worse than a non-mechanistic model is evidently unable to explain some aspect of the data.
+At the very least, this discrepancy should be identified and discussed.
+
+\item \label{point:iii} {\bf Residual analysis}.
+Introductory statistics classes, when covering linear regression, emphasize that a careful and complete data analysis involves examining deviations from the fitted model \cite{faraway14}.
+This is typically achieved by plotting residuals, a suitably rescaled measure of disparities between each observation and its corresponding fitted value.
+A relevant measure of residual in the current context is the {\it log-likelihood anomaly}, defined as the discrepancy between the mechanistic fit and a benchmark for components of the likelihood at each observation.
+Supplementary Sec.~{\suppSecResiduals} describes how these tools were used for developing and evaluating model~{\RevisedModelConstrained}.
+
+\item \label{point:vii} {\bf Uncertainty}.
+Reliable conclusions should be robust to plausible variations in data, models, and algorithms \cite{yu20}.
+Standard statistical methods provide measures of uncertainty, and the validity of these measures depends critically on the statistical validity of the model.
+Appropriate modeling of overdispersion can be critical to accurate assessment of uncertainty for dynamic models \citep{breto09,he10,stocks20,whitehouse23}.
+
+\item \label{point:viii} {\bf Reproducibility and extendability}.
+Observational studies are not generally reproducible in an experimental sense.
+However,  the numerical conclusions should be readily reproducible from the observations.
+A substantial part of the value of a computational model is that it permits {\it in silico} experimentation of the modeled system.
+The authors should build and share a computational environment that not only reproduces published numbers but also facilitates future {\it in silico} experimentation.
+Subsequent research should readily be able to challenge the assumptions of the model in light of subsequent data.
+In practice, this requires provision of free, open-source software environment within which the published analysis can readily be replicated, modified and extended \citep{gentleman07,wheeler23}. 
+
+\item \label{point:ix} {\bf Appropriate conclusions from observational data}.
+In the absence of a randomized controlled experiment, the care required to move from a fitted model parameter to a causal claim is well known in linear regression analysis \cite{faraway14}.
+The same principles apply to nonlinear dynamic metapopulation models: the model structure may be informed by prior scientific knowledge, and the model may statistically explain population-level data, yet observational data cannot readily rule out the possibility of alternative explanations.
+A model may be called hypothetically causal when it is consistent with scientifically plausible causal mechanisms, but the model fitting process does not itself validate these assumptions---this is a common situation for metapopulation modeling.
+
+\end{enumerate}
+
+In conclusion, the study of metapopulation dynamics will continue to benefit from advances in algorithms, software and data analysis methodologies.
+The models should undergo critical scrutiny to delineate their strengths and weaknesses, following evaluation procedures such as we have described in this paper. 
+With due care, these models can unearth limitations in existing knowledge, investigate hypotheses that may extend our knowledge, and furnish us with valuable predictive tools.
+
+\section*{Methods}
+
+{\it Data}.
+COVID-19 case reports, city population counts, and the time-varying matrix of movement between cities, were taken from \citep{li20}.
+Some erroneous numbers, revealed by our data analysis, were subsequently modified as described in Supplementary Sec.~\suppSecOurModel.
+
+{\it Model}.
+Our model is a spatiotemporal partially observed Markov process (SpatPOMP) \citep{ionides21}.
+A partially observed Markov process (POMP) \citep{breto09,king16} is a stochastic dynamic model comprised of: (i) a latent process having the Markov property that the future is conditionally independent of the past given the present; (ii) a measurement process, describing how the data are modeled as noisy and incomplete observations of the latent process.
+The SpatPOMP framework adds an extra assumption that the latent process is comprised of a collection of units, each of which has its own latent process and observation process.
+The latent processes for each unit can be interdependent, but the observations for a given unit are required to depend only on the latent process for that unit.
+In our context, each city is a unit.
+General notation for SpatPOMP models is set up in Supplementary Sec.~\suppSecOurModel, and this notation is subsequently used to define mathematically the specific SpatPOMP models studied in this paper (\LiMobility, \LiParams,\RevisedModelUnconstrained and \RevisedModelConstrained).
+All the models under consideration have an SEAIR structure, as described in Figure~\ref{fig:flow_diagram}.
+
+{\it Likelihood evaluation and maximization}.
+
+{\it Model criticism}.
+
+{\it Software environment}.
+Numerical work was carried out in R \cite{R}. 
+Models and data analysis methodology were developed in an R package, \code{metapoppkg} \cite{metapoppkg} which is additionally designed to assist reproducibility and extendability of our results.
+Models in \code{metapoppkg} are implemented using \code{spatPomp} \cite{asfaw23arxiv} which provides a general representation of SpatPOMP models extending the POMP model representation in \code{pomp} \cite{king16}.
+
+
+
+\section*{Data availability}
+
+\section*{Code availability}
+
+\section*{Acknowledgements}
+This work was supported by National Science Foundation grants DMS-1761603 and NSF DMS-1761612.
+
+\section*{Author contributions}
+J.L., E.L.I. and N.N. designed the study and carried out the numerical analysis. J.L., E.L.I, A.A.K. and N.N. developed the software environment supporting the data analysis. All authors discussed and interpreted the results. E.L.I. drafted the manuscript, and all authors edited the manuscript.
+
+\bibliographystyle{ieeetr}
+
+\bibliography{bib-metapop}
+
+\end{document}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,16 @@
+
+Residual analysis
+
+
+code.R estimates various measures of anomaly for the fitted model
+code-uc.R does similar, but for the unconstrained model (M5)
+
+explore.R investigates the output of code.R
+explore-uc.R does similar, for model M5
+
+analysis.R is a more formal analysis of the output of code.R
+analysis-c.R and analysis-uc.R are updated versions used to develop the
+anomaly plot in si.Rnw
+
+
+

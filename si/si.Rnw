@@ -1,0 +1,2136 @@
+<<knitr-opts, include=FALSE, purl=FALSE>>=
+library(knitr)
+opts_knit$set(concordance=TRUE)
+opts_chunk$set(
+  # cache=FALSE,
+  cache=TRUE,   ## caution: use cache=TRUE only when making text edits
+  progress=TRUE,
+  prompt=TRUE,
+  highlight=FALSE,
+  tidy=TRUE,
+  tidy.opts=list(
+    keep.blank.line=FALSE
+  ),
+  comment="",
+#  warning=FALSE,
+#  message=FALSE,
+  error=TRUE,
+  echo=FALSE,
+  strip.white=TRUE,
+  results="markup",
+  fig.path="figure/",
+  fig.lp="fig:",
+  fig.align="center",
+  fig.show="asis",
+  dev="png",
+  dpi=300,
+  dev.args=list(
+    bg="transparent",
+    pointsize=9
+  )
+)
+
+R0_M6 <- function (params, be = T) 
+{
+    a = params[ifelse(be, "alpha_be1", "alpha_af1")]
+    b = params[ifelse(be, "Beta_be1", "Beta_af1")]
+    D = params["D1"]
+    mu = params[ifelse(be, "mu_be1", "mu_af1")]
+    unname((a + (1 - a) * mu) * b * D)
+}
+
+plot_si <- function(x, U=373, limit=4, order="population") {
+  df <- as.data.frame(x)
+  df[x@unit_obsnames] <- log10(df[x@unit_obsnames]+1)
+  # change the order, sort by population
+  if (order=="population"){
+    popu <- df$pop[1:U]
+    index <- order(order(popu, decreasing = T))
+  } else if (order=="cases"){
+    index <- 1:U
+  }
+  wuhan_index <- which(df$city=="Wuhan")
+  df$Wuhan <- NA
+  df$Wuhan[wuhan_index] <- df$cases[wuhan_index]
+#  shenyang_index <- which(df$city=="Shenyang")
+#  df$Shenyang <- NA
+#  df$Shenyang[shenyang_index] <- df$cases[shenyang_index]
+  df$y_ticks <- rep(index,30)
+
+  ggplot2::ggplot(data = df,
+    mapping = ggplot2::aes(x = !!rlang::sym(x@timename), y = .data$y_ticks)) +
+    ggplot2::scale_x_continuous(expand=c(0,0)) +
+    ggplot2::scale_y_continuous(expand=c(0,0), sec.axis = sec_axis(~ .)) +
+    ggplot2::geom_tile(mapping = ggplot2::aes(fill = !!rlang::sym(x@unit_obsnames))) +
+    ggplot2::scale_fill_gradient(low = "#FFFFFF", high = "#000000",limits=c(0,limit)) +
+    ggplot2::labs(x = "time",
+                  y = "unit",
+                  fill = paste("log10\n(",x@unit_obsnames,"+1)",sep="")) +
+    ggnewscale::new_scale("fill") +
+    ggplot2::geom_tile(mapping = ggplot2::aes(fill = .data$Wuhan), data = ~subset(., !is.na(Wuhan))) +
+    ggplot2::scale_fill_gradient(low = "#FFFFFF", high = "#FF0000",limits=c(0,limit)) + 
+    ggplot2::labs(fill = "log10\n(Wuhan+1)") +
+    ggnewscale::new_scale("fill") +
+    ggplot2::theme(
+      axis.text.y=ggplot2::element_blank(),
+      axis.ticks.y=ggplot2::element_blank(),
+      panel.border=ggplot2::element_blank(),
+      axis.line.y = ggplot2::element_line(linewidth = 0.5, linetype = "solid"))
+  
+}
+
+
+sim_percentile_si <- function(U = 373, Nsim=100, order="population", model = "li23", seed = 12315, registerDoRNG = 3123465, params) {
+  cores <-  as.numeric(Sys.getenv('SLURM_NTASKS_PER_NODE', unset = NA))
+  if(is.na(cores)) cores <- parallel::detectCores()
+  doParallel::registerDoParallel(cores)
+  
+  if (model == "li23"){
+    x <- li23(U=U)
+  } else if (model == "li20"){
+    x <- li20(U=U)
+  }
+  
+  set.seed(seed)
+  doRNG::registerDoRNG(registerDoRNG)
+  sim_out <- foreach::foreach(i = 1:Nsim, .packages = 'spatPomp') %dopar% obs(simulate(x,params=params))
+  
+  sim_array <- array(unlist(sim_out), c(U, 30, length(sim_out)))
+  quantiles1 <- log10(apply(sim_array, c(1, 2), function(x) quantile(x, probs = 0.1))+1)
+  quantiles2 <- log10(apply(sim_array, c(1, 2), function(x) quantile(x, probs = 0.5))+1)
+  quantiles3 <- log10(apply(sim_array, c(1, 2), function(x) quantile(x, probs = 0.9))+1)
+  
+  quantiles1 <- data.frame(value = matrix(as.vector(quantiles1), nrow = U*30, ncol = 1))
+  quantiles2 <- data.frame(value = matrix(as.vector(quantiles2), nrow = U*30, ncol = 1))
+  quantiles3 <- data.frame(value = matrix(as.vector(quantiles3), nrow = U*30, ncol = 1))
+  
+  df <- as.data.frame(x)
+  # change the order, sort by population
+  if (order=="population"){
+    popu <- df$pop[1:U]
+    index <- order(order(popu, decreasing = T))
+  } else if (order=="cases"){
+    index <- 1:U
+  }
+  df$y_ticks <- rep(index,30)
+  wuhan_index <- which(df$city=="Wuhan")
+
+  df1 <- df
+  df1$cases <- quantiles1$value
+  df1$Wuhan <- NA
+  df1$Wuhan[wuhan_index] <- df1$cases[wuhan_index]
+
+  df2 <- df
+  df2$cases <- quantiles2$value
+  df2$Wuhan <- NA
+  df2$Wuhan[wuhan_index] <- df2$cases[wuhan_index]
+
+  df3 <- df
+  df3$cases <- quantiles3$value
+  df3$Wuhan <- NA
+  df3$Wuhan[wuhan_index] <- df3$cases[wuhan_index]
+
+  list(df1=df1,df2=df2,df3=df3, unit_obsnames=x@unit_obsnames,
+   timename=x@timename)
+}
+
+
+plot_percentile_si <- function(df_list){
+  limit <- max(c(df_list$df1$cases,df_list$df2$cases,df_list$df3$cases))
+  df <- df_list$df1
+  plot1 <- ggplot2::ggplot(data = df,
+                           mapping = ggplot2::aes(x = !!rlang::sym(df_list$timename),
+                                                  y = .data$y_ticks)) +
+    ggplot2::scale_x_continuous(expand=c(0,0)) +
+    ggplot2::scale_y_continuous(expand=c(0,0), sec.axis = sec_axis(~ .)) +
+    ggplot2::geom_tile(mapping = ggplot2::aes(fill = !!rlang::sym(df_list$unit_obsnames))) +
+    ggplot2::scale_fill_gradient(low = "#FFFFFF", high = "#000000",limits=c(0,limit)) +
+    ggplot2::labs(x = "time",
+                  y = "unit",
+                  fill = paste("log10\n(",df_list$unit_obsnames,"+1)",sep="")) +
+    ggnewscale::new_scale("fill") +
+    ggplot2::geom_tile(mapping = ggplot2::aes(fill = .data$Wuhan), data = ~subset(., !is.na(Wuhan))) +
+    ggplot2::scale_fill_gradient(low = "#FFFFFF", high = "#FF0000",limits=c(0,limit)) + 
+    ggplot2::labs(fill = "log10\n(Wuhan+1)") +
+    ggnewscale::new_scale("fill") +    
+    ggplot2::theme(
+      axis.text.y=ggplot2::element_blank(),
+      panel.border=ggplot2::element_blank(),
+      legend.position = "none",
+      axis.title.x=ggplot2::element_blank(), 
+      axis.ticks.x=ggplot2::element_blank(),
+      axis.ticks.y=ggplot2::element_blank(),
+      axis.text.x=ggplot2::element_blank(),
+      axis.line.y = ggplot2::element_line(linewidth = 0.5, linetype = "solid")
+    ) +
+    ylab("City") +
+    ggplot2::ggtitle(expression("(A) "~10^{th}~percentile))
+  
+  df <- df_list$df2
+  plot2 <- ggplot2::ggplot(data = df,
+                           mapping = ggplot2::aes(x = !!rlang::sym(df_list$timename),
+                                                  y = .data$y_ticks)) +
+    ggplot2::scale_x_continuous(expand=c(0,0)) +
+    ggplot2::scale_y_continuous(expand=c(0,0), sec.axis = sec_axis(~ .)) +
+    ggplot2::geom_tile(mapping = ggplot2::aes(fill = !!rlang::sym(df_list$unit_obsnames))) +
+    ggplot2::scale_fill_gradient(low = "#FFFFFF", high = "#000000",limits=c(0,limit)) +
+    ggplot2::labs(x = "time",
+                  y = "unit",
+                  fill = paste("log10\n(",df_list$unit_obsnames,"+1)",sep="")) +
+    ggnewscale::new_scale("fill") +
+    ggplot2::geom_tile(mapping = ggplot2::aes(fill = .data$Wuhan), data = ~subset(., !is.na(Wuhan))) +
+    ggplot2::scale_fill_gradient(low = "#FFFFFF", high = "#FF0000",limits=c(0,limit)) + 
+    ggplot2::labs(fill = "log10\n(Wuhan+1)") +
+    ggnewscale::new_scale("fill") +
+    ggplot2::theme(
+      axis.text.y=ggplot2::element_blank(),
+       panel.border=ggplot2::element_blank(),
+      legend.position = "none",
+      axis.title.x=ggplot2::element_blank(), 
+      axis.ticks.x=ggplot2::element_blank(), 
+      axis.ticks.y=ggplot2::element_blank(),
+      axis.text.x=ggplot2::element_blank(),
+      axis.line.y = ggplot2::element_line(linewidth = 0.5, linetype = "solid")
+   ) + 
+    ylab("City") +
+    ggplot2::ggtitle(expression("(B) "~50^{th}~percentile))
+  
+  df <- df_list$df2
+  plot3 <- ggplot2::ggplot(data = df,
+                           mapping = ggplot2::aes(x = !!rlang::sym(df_list$timename),
+                                                  y = .data$y_ticks)) +
+    ggplot2::scale_x_continuous(expand=c(0,0)) +
+    ggplot2::scale_y_continuous(expand=c(0,0), sec.axis = sec_axis(~ .)) +
+    ggplot2::geom_tile(mapping = ggplot2::aes(fill = !!rlang::sym(df_list$unit_obsnames))) +
+    ggplot2::scale_fill_gradient(low = "#FFFFFF", high = "#000000",limits=c(0,limit)) +
+    ggplot2::labs(x = "time",
+                  y = "unit",
+                  fill = paste("log10\n(",df_list$unit_obsnames,"+1)",sep="")) +
+    ggnewscale::new_scale("fill") +
+    ggplot2::geom_tile(mapping = ggplot2::aes(fill = .data$Wuhan), data = ~subset(., !is.na(Wuhan))) +
+    ggplot2::scale_fill_gradient(low = "#FFFFFF", high = "#FF0000",limits=c(0,limit)) + 
+    ggplot2::labs(fill = "log10\n(Wuhan+1)") +
+    ggnewscale::new_scale("fill") +
+    ggplot2::theme(
+      axis.text.y=ggplot2::element_blank(),
+      axis.ticks.y=ggplot2::element_blank(),
+      panel.border=ggplot2::element_blank(),
+      legend.position = "bottom",
+      axis.line.y = ggplot2::element_line(linewidth = 0.5, linetype = "solid")
+    ) + 
+    ylab("City") +
+    xlab("Day") +
+    ggplot2::ggtitle(expression("(C) "~90^{th}~percentile))
+
+  
+  panel_plot=plot1/plot2/plot3
+  panel_plot
+  
+}
+
+
+
+@
+
+%% to help reduce white space around figures
+\renewcommand{\topfraction}{.85}
+\renewcommand{\bottomfraction}{.7}
+\renewcommand{\textfraction}{.15}
+\renewcommand{\floatpagefraction}{.66}
+
+\documentclass[10pt]{article}
+
+%% for flow diagrams
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\usetikzlibrary {arrows.meta}
+\usetikzlibrary{shapes.geometric}
+
+\newcommand\LiMobility{M$_1$}
+\newcommand\LiParams{M$_2$}
+\newcommand\BenchmarkIID{M$_3$}
+\newcommand\BenchmarkAR{M$_4$}
+\newcommand\RevisedModelUnconstrained{M$_5$}
+\newcommand\RevisedModelConstrained{M$_6$}
+\newcommand\MainResultsTable{1}
+
+%% for algorithm pseudocode
+\usepackage{enumerate,alltt,xstring}
+\usepackage[ruled,noline,linesnumbered]{algorithm2e}
+\SetKwFor{For}{for}{do}{end}
+\SetKwFor{While}{while}{do}{end}
+\SetKwInput{KwIn}{input}
+\SetKwInput{KwOut}{output}
+\SetKwInput{KwCplx}{complexity}
+\SetKwInput{KwIndices}{note}
+\SetKwBlock{Begin}{procedure}{}
+\DontPrintSemicolon
+\newcommand\argequals{{\,=\,}}
+\newcommand\data[1]{#1^*}
+\newcommand\giventh{{\hspace{0.5mm};\hspace{0.5mm}}}
+\newcommand\seq[2]{{#1}\!:\!{#2}}
+\newcommand\mydot{{\,\cdot\,}}
+\newcommand\given{{\,\vert\,}}
+\newcommand\normal{{\mathrm{Normal}}}
+\newcommand\vmeasure{V}
+\newcommand\emeasure{e}
+
+\newcommand\Time{N}
+\newcommand\ttime{n}
+\newcommand\Np{J}
+\newcommand\np{j}
+\newcommand\altNp{q}
+
+\newcommand\prob{\mathrm{Prob}}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage[version=4]{mhchem}
+\usepackage{stmaryrd}
+\usepackage{mathtools}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{subfigure}
+\usepackage{hyperref}
+\usepackage{fullpage}
+\usepackage{xurl}
+\usepackage{makecell}
+\usepackage{multirow}
+\usepackage{multicol}
+\usepackage[ruled,noline,linesnumbered]{algorithm2e}
+\usepackage[normalem]{ulem}% to use \sout in feedback commands
+\usepackage{bm}
+\usepackage[mathscr]{euscript}
+\usepackage{amsthm}
+\usepackage{natbib}
+\usepackage{bbm} % for \mathbbm{1}
+
+\newcommand\lik{L}
+\newcommand\loglik{\ell}
+\newcommand\myvec[1]{{\mathbf{#1}}}
+\newcommand\proglang[1]{\textsf{#1}} 
+\newcommand\code[1]{\texttt{#1}}
+\newcommand\pkg[1]{\code{#1}}
+\newcommand\class[1]{\code{#1}}
+\newcommand\unit{u}
+\newcommand\altUnit{\tilde{u}}
+\newcommand\Unit{U}     
+\newcommand\rate{\mu}
+\usepackage{upgreek}
+%\newcommand\relativeTransmission{\phi}
+\newcommand\relativeTransmission{\upmu}
+\newcommand\diagnosisDelay{T_d}
+\newcommand\latency{Z}
+\newcommand\infectiousPeriod{D}
+\newcommand\reportRate{\alpha}
+\newcommand\Rzero{\mathcal{R}_0}
+\newcommand\mobilityFactor{\vartheta}
+\newcommand\eqsep{\hspace{1mm}}
+\newcommand\pop{P}
+\newcommand\EzeroDescription{Initial $E$ in Wuhan}
+\newcommand\AzeroDescription{Initial $A$ in Wuhan}
+\newcommand\alphaDescription{Reported fraction}
+\newcommand\before{\mathrm{be}}
+\newcommand\after{\mathrm{af}}
+
+\newcommand\E{\mathbb{E}}
+\newcommand\Var{\mathrm{Var}}
+\newcommand\var{\Var}
+
+% for figures illustrating POMPs and the problem space for spatPomp
+\usepackage{tikz,pgfplots}
+\pgfplotsset{compat=1.16}
+\usepgfplotslibrary{fillbetween}
+\usetikzlibrary{patterns}
+\usetikzlibrary{arrows,chains,matrix,positioning,scopes,fit,decorations.pathreplacing}
+\tikzset{join/.code=\tikzset{after node path={%
+\ifx\tikzchainprevious\pgfutil@empty\else(\tikzchainprevious)%
+edge[every join]#1(\tikzchaincurrent)\fi}}}
+%
+% \tikzset{>=stealth,every on chain/.append style={join},
+%         every join/.style={->}}
+\tikzstyle{labeled}=[execute at begin node=$\scriptstyle,
+   execute at end node=$]
+\newcommand{\FixedLengthArrow}{1,0}
+
+
+\hypersetup{colorlinks=true, linkcolor=blue, filecolor=magenta, urlcolor=cyan,}
+\urlstyle{same}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1em}
+
+\usepackage{color}
+%orange for EI
+\definecolor{orange}{rgb}{1,0.5,0}
+\newcommand\ei[2]{\sout{#1} \textcolor{orange}{#2}}
+\newcommand\eic[1]{\textcolor{orange}{[#1]}}
+%green for PN
+\definecolor{green}{rgb}{0,0.5,0}
+\newcommand\pn[2]{\sout{#1} \textcolor{green}{#2}}
+\newcommand\pnc[1]{\textcolor{red}{[#1]}}
+%purple for JF
+\definecolor{purple}{rgb}{0.5,0,1}
+\newcommand\jf[2]{\sout{#1} \textcolor{purple}{#2}}
+\newcommand\jfc[1]{\textcolor{purple}{[#1]}}
+%teal for TODO
+\definecolor{teal}{rgb}{0,0.5,0.8}
+\newcommand\todo[1]{\textcolor{teal}{[TO DO? #1]}}
+
+\graphicspath{{plots/}}
+
+
+\renewcommand{\contentsname}{Supplementary Content}
+\renewcommand{\refname}{Supplementary References}
+\renewcommand\thefigure{S-\arabic{figure}}
+\renewcommand\thetable{S-\arabic{table}}
+%\renewcommand\thepage{S-\arabic{page}}
+\renewcommand\thesection{S\arabic{section}}
+\renewcommand\theequation{S\arabic{equation}}
+%\renewcommand\thelemma{S\arabic{lemma}}
+%\renewcommand\thealgocf{S\arabic{algocf}}
+
+\newcommand\secSep{\hspace{2mm}}
+
+\begin{document}
+%\SweaveOpts{concordance=TRUE}
+
+\date{\small Compiled \today,  using \proglang{R} \Sexpr{paste0(R.version$major,".",R.version$minor)}, \pkg{metapoppkg} \Sexpr{packageVersion('metapoppkg')}, \pkg{spatPomp} \Sexpr{packageVersion('spatPomp')}, and \pkg{pomp} \Sexpr{packageVersion('pomp')}.}
+\title{Supplement to ``Machine Learning for Mechanistic Models of Metapopulation Dynamics''}
+\author{Jifan Li, Edward L. Ionides, Aaron A. King, Mercedes Pascual and Ning Ning}
+\maketitle
+
+%\vspace{3mm}
+
+\setcounter{tocdepth}{1}
+\tableofcontents
+
+ \newpage
+ 
+<<packages, include=FALSE,cache=FALSE>>=
+library(tidyverse)
+library(metapoppkg)
+library(ggplot2)
+library(ggnewscale)
+library(doParallel)
+library(doRNG)
+
+cores <-  as.numeric(Sys.getenv('SLURM_NTASKS_PER_NODE', unset = NA))
+if(is.na(cores)) cores <- detectCores()
+registerDoParallel(cores)
+theme_set(theme_bw())
+
+if (!dir.exists("../model1/si")) {
+  dir.create("../model1/si", recursive = TRUE)
+}
+@
+
+<<set-opts, include=FALSE>>=
+options(
+  scipen = 2,
+  help_type = "html",
+  stringsAsFactors = FALSE,
+  continue = "+  ",
+  width = 70,
+  useFancyQuotes = FALSE,
+  reindent.spaces = 2,
+  xtable.comment = FALSE
+)
+@
+
+
+
+
+<<profile_prep_uc,warning=FALSE>>=
+
+# These results are also used to construct the confidence intervals in the results table,
+# hence are computed at this point
+
+library(tidyverse)
+library(patchwork)
+
+R0_uc_be <- readRDS("../profile8/R0/profile_R0_be_full.rds")[,c("logLik","R0_be1")]
+# rbind(
+#   readRDS("../profile8/R0/out_3/profile_R0_be.rds")[,c("logLik","R0_be1")],
+#   readRDS("../profile8/R0/out_3/profile_R0_be2.rds")[,c("logLik","R0_be1")]
+# )
+  
+R0_uc_af <- readRDS("../profile8/R0/profile_R0_af_full.rds")[,c("logLik","R0_af1")]
+# R0_uc_af <- rbind(
+#   readRDS("../profile8/R0/out_3/profile_R0_af.rds")[,c("logLik","R0_af1")],
+ #   readRDS("../profile8/R0/out_3/profile_R0_af2.rds")[,c("logLik","R0_af1")]
+ # )
+
+Z_uc_be <-  readRDS("../profile8/Z/profile_Z_be_full.rds")[,c("logLik","Z_be1")]
+# rbind(
+#   readRDS("../profile8/Z/out_3/profile_Z_be3.rds")[,c("logLik","Z_be1")]
+# )
+
+Z_uc_af <-   readRDS("../profile8/Z/profile_Z_af_full.rds")[,c("logLik","Z_af1")]
+# rbind(
+#   readRDS("../profile8/Z/profile_Z_af_full.rds")[,c("logLik","Z_af1")]
+# )
+
+D_uc_be <-  readRDS("../profile8/D/profile_D_be_full.rds")[,c("logLik","D_be1")]
+# rbind(
+#   readRDS("../profile8/D/profile_D_be_full.rds")[,c("logLik","D_be1")]
+# )
+
+D_uc_af <-   readRDS("../profile8/D/profile_D_af_full.rds")[,c("logLik","D_af1")]
+# rbind(
+#   readRDS("../profile8/D/profile_D_af_full.rds")[,c("logLik","D_af1")]
+# )
+
+alpha_uc_be <- readRDS("../profile8/alpha/profile_alpha_be_full.rds")[,c("logLik","alpha_be1")]
+# rbind(
+#   readRDS("../profile8/alpha/out_3/profile_alpha_be2.rds")[,c("logLik","alpha_be1")],
+#   readRDS("../profile8/alpha/out_3/profile_alpha_be3.rds")[,c("logLik","alpha_be1")]
+# )
+alpha_uc_be <- alpha_uc_be[alpha_uc_be$alpha_be1>0.02 & alpha_uc_be$alpha_be1<0.2 ,]
+
+alpha_uc_af <-   readRDS("../profile8/alpha/profile_alpha_af_full.rds")[,c("logLik","alpha_af1")]
+# rbind(
+#   readRDS("../profile8/alpha/out_3/profile_alpha_af2.rds")[,c("logLik","alpha_af1")]
+# )
+alpha_uc_af <- alpha_uc_af[alpha_uc_af$alpha_af1>0.2 ,]
+
+mu_uc_be <- rbind(
+  readRDS("../profile8/mu/profile_mu_be_full.rds")[,c("logLik","mu_be1")]
+)
+
+mu_uc_af <- rbind(
+  readRDS("../profile8/mu/profile_mu_af_full.rds")[,c("logLik","mu_af1")]
+)  
+
+Beta_uc_be <- rbind(
+  readRDS("../profile8/Beta/profile_Beta_be_full.rds")[,c("logLik","Beta_be1")]
+)
+Beta_uc_be <- Beta_uc_be[Beta_uc_be$Beta_be1<1.25,]
+
+Beta_uc_af <- rbind(
+  readRDS("../profile8/Beta/profile_Beta_af_full.rds")[,c("logLik","Beta_af1")]
+)
+
+A_0_uc <- rbind(
+  readRDS("../profile8/A_0/profile_A_0_full.rds")[,c("logLik","A_01")]
+)
+A_0_uc <- A_0_uc[A_0_uc$A_01<9000 ,]
+
+E_0_uc <- rbind(
+  readRDS("../profile8/E_0/profile_E_0_full.rds")[,c("logLik","E_01")]
+)
+E_0_uc <- E_0_uc[E_0_uc$E_01<9000 ,]
+
+sigma_SE_uc <- rbind(
+  readRDS("../profile8/sigma_SE/profile_sigma_SE_full.rds")[,c("logLik","sigma_SE1")]
+)
+
+tau_uc <- rbind(
+  readRDS("../profile8/tau/profile_tau_full.rds")[,c("logLik","tau1")]
+)
+tau_uc <- tau_uc[tau_uc$tau1>0.2 & tau_uc$tau1<0.6 ,]
+
+theta_uc <- rbind(
+  readRDS("../profile8/theta/profile_theta_full.rds")[,c("logLik","theta1")]
+)
+theta_uc <- theta_uc[theta_uc$theta1<5 ,]
+
+maxLogLik_uc <- max(R0_uc_be$logLik,R0_uc_af$logLik,Z_uc_be$logLik,Z_uc_af$logLik,D_uc_be$logLik,
+  D_uc_af$logLik,alpha_uc_be$logLik,alpha_uc_af$logLik,mu_uc_be$logLik,mu_uc_af$logLik,Beta_uc_be$logLik,
+  Beta_uc_af$logLik,A_0_uc$logLik,E_0_uc$logLik,sigma_SE_uc$logLik,tau_uc$logLik,
+  theta_uc$logLik)
+
+myplot <- function(x,type=c("uc","c")){
+  param=colnames(x)[2]
+  colnames(x) <- c("logLik","param")
+  nmax <- 3
+  x_sort <- lapply(split(x$logLik,x$param),function(y)sort(y,decreasing=T)[1:nmax])
+  x2 <- data.frame(
+    logLik=unlist(x_sort),
+    param=rep(as.numeric(names(x_sort)),each=nmax)
+  )
+  x <- x2
+  mcap_results <- pomp::mcap(x$logLik, x$param)
+  maxLogLik <- switch(type[1],uc=maxLogLik_uc,c=maxLogLik_c)
+  out <- ggplot(x,aes(param,logLik)) +
+    geom_point() +
+    ylim(maxLogLik-100,maxLogLik) +
+    xlab(param) +
+    geom_line(data = mcap_results$fit,
+      aes(x = parameter, y = smoothed), col = 'blue') +
+    geom_vline(xintercept = mcap_results$ci[1], linetype = 'dashed') +
+    geom_vline(xintercept = mcap_results$ci[2], linetype = 'dashed') +
+    geom_vline(xintercept = mcap_results$mle, col = 'blue') 
+  attr(out,"ci") <- mcap_results$ci
+  attr(out,"mle") <- mcap_results$mle
+  out
+}
+
+
+# we treat A_0 differently, since the MLE occurs on the boundary, at A=0.
+myplot_A_0 <- function(x,type=c("uc","c")){
+
+  param=colnames(x)[2]
+  colnames(x) <- c("logLik","param")
+  nmax <- 3
+  x_sort <- lapply(split(x$logLik,x$param),function(y)sort(y,decreasing=T)[1:nmax])
+  x2 <- data.frame(
+    logLik=unlist(x_sort),
+    param=rep(as.numeric(names(x_sort)),each=nmax)
+  )
+  x <- x2
+  mcap_results <- pomp::mcap(x$logLik, x$param)
+
+  # include a result for A_0=0, which should be essentially the same as A_0=1
+  # but the logarithmic transformation prevented using A_0=0 in the actual profile
+  mcap_results$fit <- rbind(
+    c(parameter=0,smoothed=mcap_results$fit[1,2]+1e-5,quadratic=NA),
+    mcap_results$fit)
+  delta <- qchisq(0.95, df = 1)*0.5
+  logLik_diff <- max(mcap_results$fit$smoothed) - mcap_results$fit$smoothed
+  mcap_results$ci <- range(mcap_results$fit$parameter[logLik_diff < delta])
+  mcap_results$mle <- mcap_results$fit$parameter[which.max(mcap_results$fit$smoothed)]
+  maxLogLik <- switch(type[1],uc=maxLogLik_uc,c=maxLogLik_c)
+  out <- ggplot(x,aes(param,logLik)) +
+    geom_point() +
+    ylim(maxLogLik-100,maxLogLik) +
+    xlab(param) +
+    geom_line(data = mcap_results$fit,
+      aes(x = parameter, y = smoothed), col = 'blue') +
+    geom_vline(xintercept = mcap_results$ci[1], linetype = 'dashed') +
+    geom_vline(xintercept = mcap_results$ci[2], linetype = 'dashed') +
+    geom_vline(xintercept = mcap_results$mle, col = 'blue') 
+  attr(out,"ci") <- mcap_results$ci
+  attr(out,"mle") <- mcap_results$mle
+  out
+}
+
+# we treat mu^be differently, since the MLE occurs on the boundary, at mu^be=1.
+myplot_mu <- function(x,type=c("uc","c")){
+
+  param=colnames(x)[2]
+  colnames(x) <- c("logLik","param")
+  nmax <- 3
+  x_sort <- lapply(split(x$logLik,x$param),function(y)sort(y,decreasing=T)[1:nmax])
+  x2 <- data.frame(
+    logLik=unlist(x_sort),
+    param=rep(as.numeric(names(x_sort)),each=nmax)
+  )
+  x <- x2
+  mcap_results <- pomp::mcap(x$logLik, x$param)
+
+  # include a result for mu=1, which should be essentially the same as the closest calculated value
+  # but the logistic transformation prevented using mu=1 in the actual profile
+  mcap_results$fit <- rbind(
+    c(parameter=1,smoothed=max(mcap_results$fit[,2])+1e-5,quadratic=NA),
+    mcap_results$fit)
+  delta <- qchisq(0.95, df = 1)*0.5
+  logLik_diff <- max(mcap_results$fit$smoothed) - mcap_results$fit$smoothed
+  mcap_results$ci <- range(mcap_results$fit$parameter[logLik_diff < delta])
+  mcap_results$mle <- mcap_results$fit$parameter[which.max(mcap_results$fit$smoothed)]
+  maxLogLik <- switch(type[1],uc=maxLogLik_uc,c=maxLogLik_c)
+  out <- ggplot(x,aes(param,logLik)) +
+    geom_point() +
+    ylim(maxLogLik-100,maxLogLik) +
+    xlab(param) +
+    geom_line(data = mcap_results$fit,
+      aes(x = parameter, y = smoothed), col = 'blue') +
+    geom_vline(xintercept = mcap_results$ci[1], linetype = 'dashed') +
+    geom_vline(xintercept = mcap_results$ci[2], linetype = 'dashed') +
+    geom_vline(xintercept = mcap_results$mle, col = 'blue') 
+  attr(out,"ci") <- mcap_results$ci
+  attr(out,"mle") <- mcap_results$mle
+  out
+}
+
+
+
+R0_be_plot_uc <- myplot(R0_uc_be,type="uc") + xlab(expression(R[0]^{be}))
+Z_be_plot_uc <- myplot(Z_uc_be,type="uc") + xlab(expression(Z^{be})) +
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+D_be_plot_uc <- myplot(D_uc_be,type="uc") + xlab(expression(D^{be}))
+mu_be_plot_uc <- myplot_mu(mu_uc_be,type="uc") + xlab(expression(mu^{be})) +
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+Beta_be_plot_uc <- myplot(Beta_uc_be,type="uc") + xlab(expression(beta^{be}))
+alpha_be_plot_uc <- myplot(alpha_uc_be,type="uc") + xlab(expression(alpha^{be}))+
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+
+R0_af_plot_uc <- myplot(R0_uc_af,type="uc") + xlab(expression(R[0]^{af}))
+Z_af_plot_uc <- myplot(Z_uc_af,type="uc") + xlab(expression(Z^{af})) +
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+D_af_plot_uc <- myplot(D_uc_af,type="uc") + xlab(expression(D^{af}))
+mu_af_plot_uc <- myplot(mu_uc_af,type="uc") + xlab(expression(mu^{af})) +
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+Beta_af_plot_uc <- myplot(Beta_uc_af,type="uc") + xlab(expression(beta^{af}))
+alpha_af_plot_uc <- myplot(alpha_uc_af,type="uc") + xlab(expression(alpha^{af}))+
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+
+A_0_plot_uc <- myplot_A_0(A_0_uc,type="uc") + xlab(expression(A[0]))
+E_0_plot_uc <- myplot(E_0_uc,type="uc") + xlab(expression(E[0])) +
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+sigma_SE_plot_uc <- myplot(sigma_SE_uc,type="uc") + xlab(expression(sigma[SE]))
+tau_plot_uc <- myplot(tau_uc) + xlab(expression(tau)) +
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+theta_plot_uc <- myplot(theta_uc,type="uc") + xlab(expression(theta))
+
+ci_uc <- rbind(
+  R0_be = c(attr(R0_be_plot_uc,"mle"),attr(R0_be_plot_uc,"ci")),
+  Z_be = c(attr(Z_be_plot_uc,"mle"),attr(Z_be_plot_uc,"ci")),
+  D_be = c(attr(D_be_plot_uc,"mle"),attr(D_be_plot_uc,"ci")),
+  mu_be = c(attr(mu_be_plot_uc,"mle"),attr(mu_be_plot_uc,"ci")),
+  Beta_be = c(attr(Beta_be_plot_uc,"mle"),attr(Beta_be_plot_uc,"ci")),
+  alpha_be = c(attr(alpha_be_plot_uc,"mle"),attr(alpha_be_plot_uc,"ci")),
+  R0_af = c(attr(R0_af_plot_uc,"mle"),attr(R0_af_plot_uc,"ci")),
+  Z_af = c(attr(Z_af_plot_uc,"mle"),attr(Z_af_plot_uc,"ci")),
+  D_af = c(attr(D_af_plot_uc,"mle"),attr(D_af_plot_uc,"ci")),
+  mu_af = c(attr(mu_af_plot_uc,"mle"),attr(mu_af_plot_uc,"ci")),
+  Beta_af = c(attr(Beta_af_plot_uc,"mle"),attr(Beta_af_plot_uc,"ci")),
+  alpha_af = c(attr(alpha_af_plot_uc,"mle"),attr(alpha_af_plot_uc,"ci")),
+  A_0 = c(attr(A_0_plot_uc,"mle"),attr(A_0_plot_uc,"ci")),
+  E_0 = c(attr(E_0_plot_uc,"mle"),attr(E_0_plot_uc,"ci")),
+  sigma_SE = c(attr(sigma_SE_plot_uc,"mle"),attr(sigma_SE_plot_uc,"ci")),
+  tau = c(attr(tau_plot_uc,"mle"),attr(tau_plot_uc,"ci")),
+  theta = c(attr(theta_plot_uc,"mle"),attr(theta_plot_uc,"ci"))  
+)
+colnames(ci_uc) <- c('mle','ci1','ci2')
+saveRDS(ci_uc,file="../ci_uc.rds")
+@
+
+
+
+<<profile_prep_c,warning=FALSE>>=
+
+# These results are also used to construct the confidence intervals in the results table,
+# hence are computed at this point
+
+library(tidyverse)
+library(patchwork)
+
+R0_c_be <- rbind(
+  readRDS("../profile7/R0/out_3/profile_R0_be.rds")[,c("logLik","R0_be1")],
+  readRDS("../profile7/R0/out_3/profile_R0_be2.rds")[,c("logLik","R0_be1")]
+)
+# R0_c_be <- R0_c_be[R0_c_be$R0_be1>2 & R0_c_be$R0_be1<6  ,]
+
+R0_c_af <- rbind(
+  readRDS("../profile7/R0/out_3/profile_R0_af.rds")[,c("logLik","R0_af1")],
+  readRDS("../profile7/R0/out_3/profile_R0_af2.rds")[,c("logLik","R0_af1")]
+)
+
+Z_c <- rbind(
+  readRDS("../profile7/Z/out_3/profile_Z.rds")[,c("logLik","Z1")],
+  readRDS("../profile7/Z/out_3/profile_Z2.rds")[,c("logLik","Z1")]
+)
+# Z_c <- Z_c[Z_c$Z1<2,]
+
+D_c <- rbind(
+  readRDS("../profile7/D/out_3/profile_D.rds")[,c("logLik","D1")],
+  readRDS("../profile7/D/out_3/profile_D2.rds")[,c("logLik","D1")] 
+)
+# D_c <- D_c[D_c$D1>2.5 & D_c$D1<8  ,]
+#myplot_c(D_c)
+
+alpha_c_be <- rbind(
+  readRDS("../profile7/alpha/out_3/profile_alpha_be.rds")[,c("logLik","alpha_be1")],
+  readRDS("../profile7/alpha/out_3/profile_alpha_be2.rds")[-c(1:9),c("logLik","alpha_be1")]
+)
+# alpha_c_be <- alpha_c_be[alpha_c_be$alpha_be1>0.02 & alpha_c_be$alpha_be1<0.2 ,]
+
+alpha_c_af <- rbind(
+  readRDS("../profile7/alpha/out_3/profile_alpha_af.rds")[,c("logLik","alpha_af1")],
+  readRDS("../profile7/alpha/out_3/profile_alpha_af2.rds")[,c("logLik","alpha_af1")]
+
+)
+#alpha_c_af <- alpha_c_af[alpha_c_af$alpha_af1>0.2 ,]
+
+mu_c_be <- rbind(
+  readRDS("../profile7/mu/out_3/profile_mu_be.rds")[,c("logLik","mu_be1")],
+  readRDS("../profile7/mu/out_3/profile_mu_be2.rds")[,c("logLik","mu_be1")]
+
+)
+
+mu_c_af <- rbind(
+  readRDS("../profile7/mu/out_3/profile_mu_af.rds")[,c("logLik","mu_af1")],
+  readRDS("../profile7/mu/out_3/profile_mu_af2.rds")[,c("logLik","mu_af1")]  
+
+)  
+
+Beta_c_be <- rbind(
+  readRDS("../profile7/Beta/out_3/profile_Beta_be.rds")[,c("logLik","Beta_be1")],
+  readRDS("../profile7/Beta/out_3/profile_Beta_be2.rds")[,c("logLik","Beta_be1")]
+
+)
+
+Beta_c_af <- rbind(
+  readRDS("../profile7/Beta/out_3/profile_Beta_af.rds")[,c("logLik","Beta_af1")],
+  readRDS("../profile7/Beta/out_3/profile_Beta_af2.rds")[,c("logLik","Beta_af1")]
+)
+# Beta_c_af <- Beta_c_af[Beta_c_af$Beta_af1>0.1 ,]
+#myplot_c(Beta_c_af)
+
+A_0_c <- rbind(
+  readRDS("../profile7/A_0/out_3/profile_A_0.rds")[,c("logLik","A_01")],
+  readRDS("../profile7/A_0/out_3/profile_A_02.rds")[,c("logLik","A_01")]
+)
+
+E_0_c <- rbind(
+  readRDS("../profile7/E_0/out_3/profile_E_0.rds")[,c("logLik","E_01")],
+  readRDS("../profile7/E_0/out_3/profile_E_02.rds")[,c("logLik","E_01")]
+)
+
+sigma_SE_c <- rbind(
+  readRDS("../profile7/sigma_SE/out_3/profile_sigma_SE.rds")[,c("logLik","sigma_SE1")],
+  readRDS("../profile7/sigma_SE/out_3/profile_sigma_SE2.rds")[,c("logLik","sigma_SE1")]
+)
+
+tau_c <- rbind(
+  readRDS("../profile7/tau/out_3/profile_tau.rds")[,c("logLik","tau1")],
+  readRDS("../profile7/tau/out_3/profile_tau2.rds")[,c("logLik","tau1")]
+)
+# tau_c <- tau_c[tau_c$tau1>0.15 & tau_c$tau1<0.6 ,]
+
+theta_c <- rbind(
+  readRDS("../profile7/theta/out_3/profile_theta.rds")[,c("logLik","theta1")],
+  readRDS("../profile7/theta/out_3/profile_theta2.rds")[,c("logLik","theta1")]
+)
+
+maxLogLik_c <- max(R0_c_be$logLik,R0_c_af$logLik,Z_c$logLik,D_c$logLik,
+  alpha_c_be$logLik,alpha_c_af$logLik,mu_c_be$logLik,mu_c_af$logLik,Beta_c_be$logLik,
+  Beta_c_af$logLik,A_0_c$logLik,E_0_c$logLik,sigma_SE_c$logLik,tau_c$logLik,
+  theta_c$logLik)
+
+
+R0_be_plot_c <- myplot(R0_c_be,type="c") + xlab(expression(R[0]^{be}))
+Z_plot_c <- myplot(Z_c,type="c") + xlab(expression(Z)) +
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+D_plot_c <- myplot(D_c,type="c") + xlab(expression(D))
+mu_be_plot_c <- myplot(mu_c_be,type="c") + xlab(expression(mu^{be})) +
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+Beta_be_plot_c <- myplot(Beta_c_be,type="c") + xlab(expression(beta^{be}))
+alpha_be_plot_c <- myplot(alpha_c_be,type="c") + xlab(expression(alpha^{be}))+
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+
+R0_af_plot_c <- myplot(R0_c_af,type="c") + xlab(expression(R[0]^{af}))
+mu_af_plot_c <- myplot(mu_c_af,type="c") + xlab(expression(mu^{af})) +
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+Beta_af_plot_c <- myplot(Beta_c_af,type="c") + xlab(expression(beta^{af}))
+alpha_af_plot_c <- myplot(alpha_c_af,type="c") + xlab(expression(alpha^{af}))+
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+
+A_0_plot_c <- myplot_A_0(A_0_c,type="c") + xlab(expression(A[0]))
+E_0_plot_c <- myplot(E_0_c,type="c") + xlab(expression(E[0])) +
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+sigma_SE_plot_c <- myplot(sigma_SE_c,type="c") + xlab(expression(sigma[SE]))
+tau_plot_c <- myplot(tau_c,type="c") + xlab(expression(tau)) +
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+theta_plot_c <- myplot(theta_c,type="c") + xlab(expression(theta))
+
+
+ci_c <- rbind(
+  R0_be = c(attr(R0_be_plot_c,"mle"),attr(R0_be_plot_c,"ci")),
+  mu_be = c(attr(mu_be_plot_c,"mle"),attr(mu_be_plot_c,"ci")),
+  Beta_be = c(attr(Beta_be_plot_c,"mle"),attr(Beta_be_plot_c,"ci")),
+  alpha_be = c(attr(alpha_be_plot_c,"mle"),attr(alpha_be_plot_c,"ci")),
+  R0_af = c(attr(R0_af_plot_c,"mle"),attr(R0_af_plot_c,"ci")),
+  mu_af = c(attr(mu_af_plot_c,"mle"),attr(mu_af_plot_c,"ci")),
+  Beta_af = c(attr(Beta_af_plot_c,"mle"),attr(Beta_af_plot_c,"ci")),
+  alpha_af = c(attr(alpha_af_plot_c,"mle"),attr(alpha_af_plot_c,"ci")),
+  A_0 = c(attr(A_0_plot_c,"mle"),attr(A_0_plot_c,"ci")),
+  E_0 = c(attr(E_0_plot_c,"mle"),attr(E_0_plot_c,"ci")),
+  sigma_SE = c(attr(sigma_SE_plot_c,"mle"),attr(sigma_SE_plot_c,"ci")),
+  tau = c(attr(tau_plot_c,"mle"),attr(tau_plot_c,"ci")),
+  Z = c(attr(Z_plot_c,"mle"),attr(Z_plot_c,"ci")),
+  D = c(attr(D_plot_c,"mle"),attr(D_plot_c,"ci")),
+  theta = c(attr(theta_plot_c,"mle"),attr(theta_plot_c,"ci"))  
+)
+colnames(ci_c) <- c('mle','ci1','ci2')
+saveRDS(ci_c,file="../ci_c.rds")
+
+@
+
+
+
+
+\section{\secSep Specification of the models}
+\label{sec:li23}
+
+
+\begin{figure}[h]
+  \centering
+\begin{tikzpicture}
+[
+  state/.style = {draw, circle, fill=blue!8, minimum width = 1.15cm}, 
+  obs/.style = {draw, circle, fill=red!8, minimum width = 1.15cm}, 
+  >/.style={shorten >=0.25mm}, % redefine arrow to stop short of node
+  >/.tip={Stealth[length=1.2mm,width=1.5mm]}, % redefine arrow style
+  ssp/.style={draw, rounded corners,inner sep=2mm} % state space
+]
+\tikzset{>={}}; % this is needed to implement the arrow redefinition
+
+		\node[state] (X10) {$X_{1,0}$}; 
+		\node (D0) [right of=X10] {$\cdots$}; 
+		\node[state] (XU0) [right of=D0] {$X_{U,0}$}; 
+		\node[state] (X11) [right=1.4cm of XU0] {$X_{1,1}$}; 
+		\node(XD1) [right of=X11] {$\cdots$}; 
+		\node[state] (XU1) [right of=XD1] {$X_{U,1}$};
+		\node[ssp, fit=(X10) (D0) (XU0)](X0){};
+		\draw[decoration={brace,raise=3pt},decorate](X0.north west) -- node[above=6pt] {$\myvec{X}_0$} (X0.north east);
+		\node[ssp, fit=(X11) (XD1) (XU1)](X1){};
+		\draw[decoration={brace,raise=3pt},decorate](X1.north west) -- node[above=6pt] {$\myvec{X}_1$} (X1.north east);
+		\draw[->] (X0) -- (X1);
+		\node[obs] (Y11) [below=1.5cm of X11] {$Y_{1,1}$}; 
+		\node (YD1) [right of=Y11] {$\cdots$}; 
+		\node[obs] (YU1) [below=1.5cm of XU1] {$Y_{U,1}$};
+		\node[ssp, fit=(Y11) (YD1) (YU1)](Y1){};
+		\draw[decoration={brace,mirror,raise=3pt},decorate](Y1.south west) -- node[below=6pt] {$\myvec{Y}_1$} (Y1.south east);
+		\draw[->] (X11.south) -- (Y11.north) node[midway, right=0.6cm]{$\cdots$};
+		\draw[->] (XU1.south) -- (YU1.north);
+    \draw [->] (X1.east) -- ++(\FixedLengthArrow) node[right] (midstates) {$\cdots$};
+    \node[state,inner sep=2.5pt] (X1N) [right=1cm of midstates] {$X_{1,N}$}; 
+		\node (XDN) [right of=X1N] {$\cdots$}; 
+		\node[state,inner sep=2.5pt] (XUN) [right of=XDN] {$X_{U,N}$};
+		\node[ssp, fit=(X1N) (XDN) (XUN)](XN){};
+		\draw[decoration={brace,raise=3pt},decorate](XN.north west) -- node[above=6pt] {$\myvec{X}_N$} (XN.north east);
+		\draw [->] (midstates) -- (XN);
+		\node[obs,inner sep=2.8pt] (Y1N) [below=1.5cm of X1N] {$Y_{1,N}$}; 
+		\node (YDN) [right of=Y1N] {$\cdots$}; 
+		\node[obs,inner sep=2.8pt] (YUN) [below=1.5cm of XUN] {$Y_{U,N}$};
+		\node[ssp, fit=(Y1N) (YDN) (YUN)](YN){};
+		\draw[decoration={brace,mirror,raise=3pt},decorate](YN.south west) -- node[below=6pt] {$\myvec{Y}_N$} (YN.south east);
+		\draw[->] (X1N.south) -- (Y1N.north) node[midway, right=0.6cm]{$\cdots$};
+		\draw[->] (XUN.south) -- (YUN.north);
+		\node (YD) [right=1cm of Y1] {$\cdots$};
+	\end{tikzpicture}
+\caption{
+Diagram for a spatiotemporal partially observed Markov process (SpatPOMP) model,  adapted from \citep{asfaw23arxiv}.
+The latent dynamic process is a continuous-time Markov chain taking value $\myvec{X}(t)=\big(X_0(t),\dots,X_U(t)\big)$ at time $t$.
+At observation time $t_n$, the value of the latent process is denoted by $\myvec{X}(t_n)=\myvec{X}_{n}=\big(X_{1,n},\dots,X_{U,n}\big)$.
+Noisy and/or incomplete observations of the latent process at this time are modeled by $\myvec{Y}_{n}=\big(Y_{1,n},\dots,Y_{U,n}\big)$.
+} \label{fig:spatpomp}
+\end{figure}
+
+We give the mathematical description of the COVID-19 models described in Figure~1 and Table~1 of the main text.
+These metapopulation models are partially observed Markov process (POMP) models with additional spatial structure, known as SpatPOMP models \citep{asfaw23arxiv}.
+The diagram in Figure~\ref{fig:spatpomp} defines a general SpatPOMP corresponding to a metapopulation with $U$ spatial units.
+The latent dynamic state is $\myvec{X}(t)=\big(X_1(t),\dots,X_U(t)\big)$, which we also write as $\myvec{X}(t)=X_{1:U}(t)$.
+The observation model at time $t_n$ is $\myvec{Y}_{n}=\big(Y_{1,n},\dots,Y_{U,n}\big)=Y_{1:U,n}$, for $n$ taking values in $\seq{1}{N}$.
+The data, $\myvec{y}^*_n=y^*_{1:U,n}$, are modeled as a realization of the random variable $Y_{1:U,n}$.
+
+For each city, $\unit$ in $\seq{1}{\Unit}$, with $\Unit=373$, we model the state at time $t$ as
+\begin{equation}
+X_{\unit}(t)=\big(S_{\unit}(t),E_{\unit}(t), A_{\unit}(t), I_{\unit}(t), R_{\unit}(t),
+  C^a_{\unit}{t}, C^b_{\unit}(t), C_{\unit}(t)\big),
+\end{equation}
+where each individual in the city is in exactly one of the compartments: susceptible ($S_{\unit}$), exposed ($E_{\unit}$), infected and infectious but asymptomatic ($A_{\unit}$), infected and infectious and symptomatic ($I_{\unit}$), and recovered or removed ($R_{\unit}$).
+The additional case reporting compartments, $C^a_{\unit}$, $C^b_{\unit}$ and $C_{\unit}$ are used to describe reporting delay.
+Individuals entering $I_{\unit}$ are simultaneously added to $C^a_{\unit}$, from which they transition to $C^b_{\unit}$ and subsequently to the observable compartment, $C_{\unit}$.
+For notational convenience, we introduce a transport compartment, $T$, which accounts for all individuals traveling between cities.
+The complete collection of compartments is therefore
+\begin{equation}
+{\mathbb C} = \big\{ S_{1:\Unit}, E_{1:\Unit},A_{1:\Unit},I_{1:\Unit},R_{1:\Unit},C^a_{1:\Unit},C^b_{1:\Unit},C_{1:\Unit},T\}.
+\nonumber
+\end{equation}
+We let $N_{VW}(t)$ count the directional transitions between $V$ to $W$ for any pair of compartments in ${\mathbb C}$, and we write $dN_{VW}$ for an infinitesimal increment, $N_{VW}(t+dt)-N_{VW}(t)$.
+We can write $\mathbf{X}(t)=\big(X_1(t),\dots,X_\Unit(t)\big)$ in terms of its value $\mathbf{X}(t_0)$ at an initial time $t_0$ together with the flow equations:
+\begin{eqnarray}
+\label{eq:dS}
+dS_{\unit} &=& -dN_{S_{\unit}E_{\unit}} + dN_{TS_{\unit}} -  dN_{S_{\unit}T},
+\\
+dE_{\unit} &=& dN_{S_{\unit}E_{\unit}} - dN_{E_{\unit}A_{\unit}} - dN_{E_{\unit}I_{\unit}} + dN_{TE_{\unit}} -  dN_{E_{\unit}T},
+\\
+dA_{\unit} &=& dN_{E_{\unit}A_{\unit}} + dN_{TA_{\unit}} -  dN_{A_{\unit}T} - dN_{A_{\unit}R_{\unit}},
+\\
+dI_{\unit} &=& dN_{E_{\unit}I_{\unit}} - dN_{I_{\unit}R_{\unit}},
+\\
+dR_{\unit} &=& dN_{I_{\unit}R_{\unit}} + dN_{A_{\unit}R_{\unit}},
+\\
+dC^a_{\unit} &=& dN_{E_{\unit}I_{\unit}} - dN_{C^a_{\unit}C^b_{\unit}},
+\\
+dC^b_{\unit} &=& dN_{C^a_{\unit}C^b_{\unit}} - dN_{C^b_{\unit}C_{\unit}},
+\\
+\label{eq:dC}
+dC_{\unit} &=& dN_{C^b_{\unit}C_{\unit}}.
+\end{eqnarray}
+In this model, individuals travel between cities only when in compartments S (susceptible), A (infected and infectious but unreported, generally asymptomatic or mildly symptomatic),  and E (exposed with a latent infection).
+Also, note that we do not match up each individual entering and leaving $T$, so there can be small stochastic variation in the total population.
+
+Each transition $dN_{VW}$ has an associated rate, $\mu^{}_{VW}$, which may depend on the state of other compartments, or on covariate processes, on parameters, or on time.
+For all compartments other than the source/sink compartment, $T$, it is convenient to specify rates per capita.
+For transitions which enter a compartment from $T$, we specify a total rate.
+The non-zero transition rates are therefore as follows:
+\begin{eqnarray}
+\label{eq:muSE}
+\rate_{S_{\unit}E_{\unit}} &=& \beta S_{\unit}(t) \left(\frac{I_{\unit}(t)+ \relativeTransmission A_{\unit}(t)}{\pop_{\unit}(t)}\right)
+d\Gamma_{\unit}/dt,
+\\
+\rate_{S_{\unit}T} \eqsep = \eqsep \rate_{E_{\unit}T} \eqsep = \eqsep \rate_{A_{\unit}T} &=& \mobilityFactor \sum_j \frac{M_{\unit j}}{\pop_{\unit}-I_{\unit}},
+\\
+\rate_{TS_{\unit}} &=& \mobilityFactor \sum_j \frac{M_{j \unit} S_{j}}{\pop_{j}-I_{j}},
+\\
+\rate_{TE_{\unit}} &=& \mobilityFactor \sum_j \frac{M_{j \unit} E_{j}}{\pop_{j}-I_{j}},
+\\
+\rate_{TA_{\unit}} &=&\mobilityFactor \sum_j \frac{M_{j \unit} A_{j}}{\pop_{j}-I_{j}},
+\\
+\rate_{E_{\unit}A_{\unit}} \eqsep = \eqsep \rate_{E_{\unit}I_{\unit}}  &=&  \alpha/Z,
+\\
+\rate_{A_{\unit}R_{\unit}} \eqsep = \eqsep \rate_{I_{\unit}R_{\unit}}  &=& 1/D,
+\\
+\rate_{C^a_{\unit}C^b_{\unit}} \eqsep = \eqsep \rate_{C^b_{\unit}C_{\unit}}  &=& 2\diagnosisDelay.
+\label{eq:muCbC}
+\end{eqnarray}
+We define $d\Gamma_{\unit}/dt$ in (\ref{eq:muSE}) as non-negative multiplicative gamma white noise with variance parameter $\sigma_{SE,\unit}$.
+That is, $\Gamma_{\unit}(t)$ is a gamma process with stationary independent increments, such that $\Gamma_{\unit}(t)-\Gamma_{\unit}(s)$ is gamma distributed with mean $t-s$ and variance $\sigma_{SE}(t-s)$.
+Equations (\ref{eq:dS})-(\ref{eq:muCbC}) specify an overdispersed continuous time Markov process via the limit of a discrete time Euler approximation as the discretization step approaches zero \citep{breto09,breto11}.
+The parameters are described in Table~\ref{tab:parameters}.
+
+
+Data for city $\unit$ at time $t_n$ is an official report $y^*_{\unit,n}$ recording new cases since time $t_{n-1}$.
+The data are modeled as a realization of a random variable $Y_{\unit,n}$ which measures $C_{\unit}(t_n)-C_{\unit}(t_{n-1})$.
+The measurement model asserts that $Y_{\unit,n}$ is a discretized normal random variable with mean
+\begin{equation}
+\label{eq:measure1}
+C_{\unit,n} = C_{\unit}(t_{n})-C_{\unit}(t_{n-1}),
+\end{equation}
+and variance
+\begin{equation}
+\label{eq:vunit_measure}
+V_{\unit,n}=C_{\unit,n}+ \tau^2C_{\unit,n}^2,
+\end{equation}
+including both Poisson scale variability and the possibility of overdispersion.
+Thus,
+\begin{equation}\nonumber
+\prob\big(Y_{u,n}=y_{u,n}\given C_{u,n}\big)=\Phi\big(y_{u,n}+0.5 \giventh C_{u,n},V_{u,n}\big) - \Phi\big(y_{u,n}-0.5 \giventh C_{u,n},V_{u,n}\big),
+\end{equation}
+where $\Phi$ is the normal cumulative distribution function.
+If $y_{u,n}=0$, we replace $ \Phi\big(y_{u,n}-0.5 \giventh C_{u,n},V_{u,n}\big)$ by $\Phi\big(-\infty \giventh C_{u,n},V_{u,n}\big)=0$.
+
+Our models {\LiMobility}, {\LiParams}, {\RevisedModelUnconstrained} and {\RevisedModelConstrained} are extensions of the model of \citet{li20}.
+The original model of \citet{li20}, which we call \code{li20}, represents the dynamic model by a system of ordinary differential equations with random rates, as discussed further in Section~\ref{sec:li20}.
+The general model including {\LiMobility}, {\LiParams}, {\RevisedModelUnconstrained} and {\RevisedModelConstrained}, which we call \code{li23}, represents the models as continuous-time Markov chains.
+In addition to this change,  \code{li23} considers two model aspects not investigated by \citet{li20}: (i) overdispersed process noise; (ii) an adjusted movement matrix to ensure that all cities are connected.
+In  {\LiMobility}, these two features are turned off, and so this model is very similar to \code{li20}, as documented subsequently in Section \ref{sec:li20} (and specifically Figure~\ref{fig:li20_plot}) where we discuss \code{li20} in more detail. {\LiMobility} and {\LiParams} have the constraint that $\sigma_{SE}=0$.
+{\LiMobility} has an additional constraint that $\tau=0$ since this parameter was not included in the dynamic model of \cite{li20}.
+Another difference between these models is that {\LiMobility} uses the mobility data from \citep{li20} whereas {\LiParams} (together with {\RevisedModelUnconstrained} and {\RevisedModelConstrained}) use the modification described in Section~\ref{sec:mobility}.
+{\RevisedModelUnconstrained} involves estimation of all the parameters estimated by \cite{li20}, with the addition of $\sigma_{SE}$ and $\tau$.
+{\RevisedModelConstrained} adds the additional constraints that $\latency^{\after}=\latency^{\before}$  and $\infectiousPeriod^{\after}=\infectiousPeriod^{\before}$.
+
+All the model parameters were specified to be shared between units.
+The model can be extended to define distinct unit-specific values for each parameter, and in some situations this is helpful \citep{ionides22,whitehouse23}.
+We developed an R package \pkg{metapoppkg} to provide a data analysis environment for our numerical work, described further in Section~\ref{sec:metapoppkg}.
+The \code{li23} and \code{li20} models are implemented by the \code{li23()} and \code{li20()} constructor functions in \pkg{metapoppkg}.
+The resulting model objects have class \class{spatPomp} which provides access to the inference and visualization tools in the R package \pkg{spatPomp} \citep{asfaw23arxiv} as well as \pkg{pomp} \citep{king16}.
+Here, we focus on likelihood evaluation via the block particle filter, implemented as \code{bpfilter}, and parameter estimation via the iterated block particle filter, \code{ibpf} (discussed in Section~\ref{sec:bpfilter}).
+The ensemble Kalman filter and iterated ensemble Kalman filter, as employed by \citep{li20}, are implemented as \code{enkf} and \code{ienkf}, respectively,  and are discussed further in Section~\ref{sec:enkf}.
+
+<<table_params>>=
+li1 <- li20(U=5,version='li20period1',for_ibpf=F)
+li_par1 <- par_li(coef(li1),dir="from_li")
+li3 <- li20(U=5,version='li20period3',for_ibpf=F)
+li_par3 <- par_li(coef(li3),dir="from_li")
+
+out3 <- readRDS("../l8/out_3/l8.rds")
+mle3 <- unlist(out3[which.max(out3$logLik),-c(1,2)])
+lik3 <- unlist(out3[which.max(out3$logLik),c(1,2)])
+
+out6 <- readRDS("../s5/out_3/s5.rds")
+mle6 <- unlist(out6[which.max(out6$logLik),-c(1,2)])
+lik6 <- unlist(out6[which.max(out6$logLik),c(1,2)])
+
+## only needed while MLEs have old notation
+U <- 373
+Anames <- paste0("A_0",1:U)
+Inames <- paste0("I_0",1:U)
+Iunames <- paste0("Iu_0",1:U)
+Irnames <- paste0("Ir_0",1:U)
+names(mle3)[names(mle3)%in%Iunames] <- Anames
+
+PROF_MAX <- TRUE # use smoothed profile maxima for point estimate
+
+@
+
+%%%% parameter table: search for pppppppppppp %%%%%%%%%%%
+
+\begin{table}
+\begin{tabular}{crc|rc|rc|lc} & 
+  {\LiMobility} & CI &
+  {\RevisedModelUnconstrained} & CI &
+  {\RevisedModelConstrained} & CI&
+  interpretation \& units 
+\\
+\hline
+$\mobilityFactor$ &
+  \Sexpr{myround(li_par1["theta1"],2)} &(1.27,1.45)&
+  \Sexpr{myround(if(PROF_MAX) attr(theta_plot_uc,"mle") else mle3["theta1"],2)} &
+    (\Sexpr{myround(attr(theta_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(theta_plot_uc,"ci")[2],2)})&  
+  \Sexpr{myround(if(PROF_MAX) attr(theta_plot_c,"mle") else mle6["theta1"],2)} &
+    (\Sexpr{myround(attr(theta_plot_c,"ci")[1],2)},\Sexpr{myround(attr(theta_plot_c,"ci")[2],2)})&  
+  Mobility factor 
+  \\  
+$\tau$ &
+  0.5 & fixed &
+  \Sexpr{myround(if(PROF_MAX) attr(tau_plot_uc,"mle") else mle3["tau1"],2)} &
+    (\Sexpr{myround(attr(tau_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(tau_plot_uc,"ci")[2],2)})&    
+  \Sexpr{myround(if(PROF_MAX) attr(tau_plot_c,"mle") else mle6["tau1"],2)} &
+    (\Sexpr{myround(attr(tau_plot_c,"ci")[1],2)},\Sexpr{myround(attr(tau_plot_c,"ci")[2],2)})&  
+  Measurement noise 
+  \\
+$\sigma_{SE}$ &
+  0 & fixed &
+  \Sexpr{myround(if(PROF_MAX) attr(sigma_SE_plot_uc,"mle") else mle3["sigma_SE1"],2)} &
+    (\Sexpr{myround(attr(sigma_SE_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(sigma_SE_plot_uc,"ci")[2],2)})&    
+  \Sexpr{myround(if(PROF_MAX) attr(sigma_SE_plot_c,"mle") else mle6["sigma_SE1"],2)} &  
+    (\Sexpr{myround(attr(sigma_SE_plot_c,"ci")[1],2)},\Sexpr{myround(attr(sigma_SE_plot_c,"ci")[2],2)})&  
+  Dynamic noise (day$^{1/2}$)
+  \\
+$E_0$ &
+  0--2000 & NA &
+  \Sexpr{myround(if(PROF_MAX) attr(E_0_plot_uc,"mle") else mle3["E_01"],0)} &
+    (\Sexpr{myround(attr(E_0_plot_uc,"ci")[1],0)},\Sexpr{myround(attr(E_0_plot_uc,"ci")[2],0)})&    
+  \Sexpr{myround(if(PROF_MAX) attr(E_0_plot_c,"mle") else mle6["E_01"],0)} &  
+    (\Sexpr{myround(attr(E_0_plot_c,"ci")[1],0)},\Sexpr{myround(attr(E_0_plot_c,"ci")[2],0)})&  
+  \EzeroDescription 
+  \\
+$A_0$ &
+  0-2000 &NA&
+  \Sexpr{myround(if(PROF_MAX) attr(A_0_plot_uc,"mle") else mle3["A_01"],0)} &
+    (\Sexpr{myround(attr(A_0_plot_uc,"ci")[1],0)},\Sexpr{myround(attr(A_0_plot_uc,"ci")[2],0)})&    
+  \Sexpr{myround(if(PROF_MAX) attr(A_0_plot_c,"mle") else mle6["A_01"],0)} &  
+    (\Sexpr{myround(attr(A_0_plot_c,"ci")[1],0)},\Sexpr{myround(attr(A_0_plot_c,"ci")[2],0)})&  
+  \AzeroDescription 
+  \\
+\hline  
+$\beta^{\before}$ &
+  \Sexpr{myround(li_par1["Beta_be1"],2)} &(1.06,1.09)&
+  \Sexpr{myround(if(PROF_MAX) attr(Beta_be_plot_uc,"mle") else mle3["A_01"],2)} &
+    (\Sexpr{myround(attr(Beta_be_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(Beta_be_plot_uc,"ci")[2],2)})&    
+  \Sexpr{myround(if(PROF_MAX) attr(Beta_be_plot_c,"mle") else mle6["Beta_be1"],2)} &
+    (\Sexpr{myround(attr(Beta_be_plot_c,"ci")[1],2)},\Sexpr{myround(attr(Beta_be_plot_c,"ci")[2],2)})&  
+  Transmission rate (day$^{-1}$)
+  \\
+$\relativeTransmission^{\before}$ &
+  \Sexpr{myround(li_par1["mu_be1"],2)} &(0.46,0.62)&
+  \Sexpr{myround(if(PROF_MAX) attr(mu_be_plot_uc,"mle") else mle3["mu_be1"],2)} &
+    (\Sexpr{myround(attr(mu_be_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(mu_be_plot_uc,"ci")[2],2)})&    
+  \Sexpr{myround(if(PROF_MAX) attr(mu_be_plot_c,"mle") else mle6["mu_be1"],2)} &
+    (\Sexpr{myround(attr(mu_be_plot_c,"ci")[1],2)},\Sexpr{myround(attr(mu_be_plot_c,"ci")[2],2)})&  
+  Relative transmission 
+  $\mu$
+  \\
+$\latency^{\before}$ &
+  \Sexpr{myround(li_par1["Z_be1"],2)} &(3.30,3.96)&
+  \Sexpr{myround(if(PROF_MAX) attr(Z_be_plot_uc,"mle") else mle3["Z_be1"],2)} &
+    (\Sexpr{myround(attr(Z_be_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(Z_be_plot_uc,"ci")[2],2)})&  
+  $^\ast$\Sexpr{myround(if(PROF_MAX) attr(Z_plot_c,"mle") else mle6["Z1"],2)} &
+    (\Sexpr{myround(attr(Z_plot_c,"ci")[1],2)},\Sexpr{myround(attr(Z_plot_c,"ci")[2],2)})&
+  Latent period (day)
+  \\
+$\infectiousPeriod^{\before}$ &
+  \Sexpr{myround(li_par1["D_be1"],2)} &(3.15,3.73)&
+  \Sexpr{myround(if(PROF_MAX) attr(D_be_plot_uc,"mle") else mle3["D_be1"],1)} &
+    (\Sexpr{myround(attr(D_be_plot_uc,"ci")[1],1)},\Sexpr{myround(attr(D_be_plot_uc,"ci")[2],1)})&  
+   $^\dagger$\Sexpr{myround(if(PROF_MAX) attr(D_plot_c,"mle") else mle6["D1"],2)} &
+    (\Sexpr{myround(attr(D_plot_c,"ci")[1],2)},\Sexpr{myround(attr(D_plot_c,"ci")[2],2)})&
+  Infectious period (day)
+  \\
+$\reportRate^{\before}$ &
+  \Sexpr{myround(li_par1["alpha_be1"],2)} &(0.10,0.18)&
+  \Sexpr{myround(if(PROF_MAX) attr(alpha_be_plot_uc,"mle") else mle3["alpha_be1"],2)} &
+    (\Sexpr{myround(attr(alpha_be_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(alpha_be_plot_uc,"ci")[2],2)})&  
+  \Sexpr{myround(if(PROF_MAX) attr(alpha_be_plot_c,"mle") else mle6["alpha_be1"],2)} &
+    (\Sexpr{myround(attr(alpha_be_plot_c,"ci")[1],2)},\Sexpr{myround(attr(alpha_be_plot_c,"ci")[2],2)})&
+  \alphaDescription 
+  \\
+$\Rzero^{\before}$ &     
+  \Sexpr{myround(R0(li_par1,be=T),2)} &(2.03,2.77)&
+  \Sexpr{myround(if(PROF_MAX) attr(R0_be_plot_uc,"mle") else R0(mle3,be=T),2)} &
+    (\Sexpr{myround(attr(R0_be_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(R0_be_plot_uc,"ci")[2],2)})&  
+  \Sexpr{myround(if(PROF_MAX) attr(R0_be_plot_c,"mle") else R0_M6(mle6,be=T),2)} &
+    (\Sexpr{myround(attr(R0_be_plot_c,"ci")[1],2)},\Sexpr{myround(attr(R0_be_plot_c,"ci")[2],2)})&
+  Basic reproductive number 
+  \\
+$\diagnosisDelay^{\before}$ &
+  \Sexpr{myround(li_par1["Td_be1"],2)} &fixed&
+  \Sexpr{myround(mle3["Td_be1"],2)} &&
+  \Sexpr{myround(mle6["Td_be1"],2)} &&
+  Diagnosis delay (day)
+  \\
+\hline
+$\beta^{\after}$ &
+  \Sexpr{myround(li_par3["Beta_af1"],2)} &(0.28,0.45)&
+  \Sexpr{myround(if(PROF_MAX) attr(Beta_af_plot_uc,"mle") else mle3["Beta_af1"],2)} &
+    (\Sexpr{myround(attr(Beta_af_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(Beta_af_plot_uc,"ci")[2],2)})&  
+  \Sexpr{myround(if(PROF_MAX) attr(Beta_af_plot_c,"mle") else mle6["Beta_af1"],2)} &
+    (\Sexpr{myround(attr(Beta_af_plot_c,"ci")[1],2)},\Sexpr{myround(attr(Beta_af_plot_c,"ci")[2],2)})&
+  Transmission rate (day$^{-1}$)
+  \\
+$\relativeTransmission^{\after}$ &
+  \Sexpr{myround(li_par3["mu_af1"],2)} &(0.31,0.61)&
+  \Sexpr{myround(if(PROF_MAX) attr(mu_af_plot_uc,"mle") else mle3["mu_af1"],2)} &
+    (\Sexpr{myround(attr(mu_af_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(mu_af_plot_uc,"ci")[2],2)})&     
+  \Sexpr{myround(if(PROF_MAX) attr(mu_af_plot_c,"mle") else mle6["mu_af1"],2)} &
+    (\Sexpr{myround(attr(mu_af_plot_c,"ci")[1],2)},\Sexpr{myround(attr(mu_af_plot_c,"ci")[2],2)})&   
+  Relative transmission 
+  \\
+$\latency^{\after}$ &
+  \Sexpr{myround(li_par3["Z_af1"],2)} &(3.30,3.65)&
+  \Sexpr{myround(if(PROF_MAX) attr(Z_af_plot_uc,"mle") else mle3["Z_af1"],2)} &
+    (\Sexpr{myround(attr(Z_af_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(Z_af_plot_uc,"ci")[2],2)})&     
+   $^\ast$\Sexpr{myround(if(PROF_MAX) attr(Z_plot_c,"mle") else mle6["Z1"],2)} &
+    (\Sexpr{myround(attr(Z_plot_c,"ci")[1],2)},\Sexpr{myround(attr(Z_plot_c,"ci")[2],2)})&   
+  Latent period (day)
+  \\
+$\infectiousPeriod^{\after}$ &
+  \Sexpr{myround(li_par3["D_af1"],2)} &(2.96,3.88)&
+  \Sexpr{myround(if(PROF_MAX) attr(D_af_plot_uc,"mle") else mle3["D_af1"],2)} &
+    (\Sexpr{myround(attr(D_af_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(D_af_plot_uc,"ci")[2],2)})&     
+  $^\dagger$\Sexpr{myround(if(PROF_MAX) attr(D_plot_c,"mle") else mle6["D1"],2)} &
+    (\Sexpr{myround(attr(D_plot_c,"ci")[1],2)},\Sexpr{myround(attr(D_plot_c,"ci")[2],2)})&   
+  Infectious period (day)
+  \\
+$\reportRate^{\after}$ &
+  \Sexpr{myround(li_par3["alpha_af1"],2)} &(0.65,0.72)&
+  \Sexpr{myround(if(PROF_MAX) attr(alpha_af_plot_uc,"mle") else mle3["alpha_af1"],2)} &
+    (\Sexpr{myround(attr(alpha_af_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(alpha_af_plot_uc,"ci")[2],2)})&     
+  \Sexpr{myround(if(PROF_MAX) attr(alpha_af_plot_c,"mle") else mle6["alpha_af1"],2)} &
+    (\Sexpr{myround(attr(alpha_af_plot_c,"ci")[1],2)},\Sexpr{myround(attr(alpha_af_plot_c,"ci")[2],2)})&   
+  \alphaDescription 
+  \\
+$\Rzero^{\after}$ &    
+  \Sexpr{myround(R0(li_par3,be=F),2)} &(0.83,1.16)&
+  \Sexpr{myround(if(PROF_MAX) attr(R0_af_plot_uc,"mle") else R0(mle3,be=F),2)} &
+    (\Sexpr{myround(attr(R0_af_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(R0_af_plot_uc,"ci")[2],2)})&     
+  \Sexpr{myround(if(PROF_MAX) attr(R0_af_plot_c,"mle") else R0_M6(mle6,be=F),2)} &
+    (\Sexpr{myround(attr(R0_af_plot_c,"ci")[1],2)},\Sexpr{myround(attr(R0_af_plot_c,"ci")[2],2)})&   
+  Basic reproductive number 
+  \\
+$\diagnosisDelay^{\after}$ &
+  \Sexpr{myround(li_par3["Td_af1"],2)} &fixed&
+  \Sexpr{myround(mle3["Td_af1"],2)} &&
+  \Sexpr{myround(mle6["Td_af1"],2)} &&
+  Diagnosis delay (day)
+  \\
+\hline
+\end{tabular}
+\caption{Parameter estimates and their confidence intervals (CIs).
+The parameter estimates and confidence intervals for {\LiMobility} come from \cite{li20}.
+The values for {\RevisedModelUnconstrained} and {\RevisedModelConstrained} come from profile likelihood plots shown in Sections~\ref{sec:unconstrained_estimation} and~\ref{sec:constrained_estimation} respectively.
+Top block of rows: parameters constant through time.
+Middle block: parameters estimated for Jan 10-Jan 23.
+Bottom block: parameters estimated for Jan 24-Feb 8.
+Parameters without specified units are dimensionless.
+For {\RevisedModelConstrained}, $\latency^{\before}=\latency^{\after}$, so the two values marked by $^\ast$ are constrained to be equal; $^\dagger$ denotes the constraint $\infectiousPeriod^{\before}=\infectiousPeriod^{\after}$.
+}\label{tab:parameters}
+\end{table}
+
+
+
+
+<<panel_plot, message=FALSE, echo=FALSE,fig.width=8.5,fig.height=10,out.width="6.5in",fig.cap="Daily case report time series for 373 cities: (A) the real data; (B) a simulation from model {\\LiMobility}; (C) a simulation from model~{\\RevisedModelConstrained}. Within each panel, cities are ordered by population, largest on the bottom row.">>=
+i <- 3
+library(metapoppkg)
+plotdir <- paste0("plot_",i,"/")
+if (!dir.exists(plotdir)) dir.create(plotdir)
+stew(file=paste0(plotdir,"panel.rda"),{
+  U <-switch(i, 5,50,373)
+  M5 <- li23(U=U)
+  M5_sim <- simulate(M5,params=mle3,seed=100)
+  M1 <- spatPomp(li23(U=U,version="li20period3",for_ibpf=F, mob_modify_factor=0),
+    rmeasure=spatPomp_Csnippet(
+      unit_statenames='C',
+      code="
+        double* cases=&cases1;
+        int u;
+        for (u = 0; u < U; u++) {
+          if (C[u] > 0.0) {
+            cases[u] = nearbyint(C[u]);
+          } else {
+            cases[u] = 0.0;
+          }
+        } 
+      "
+    )
+  )
+  coef(M1)["sigma_SE1"] <- 0
+  M1_sim <- simulate(M1,seed=100)
+})
+panel_plot <- bake(file=paste0(plotdir,"panel2.rds"),{
+  limit <- log10(max(c(obs(M5),obs(M5_sim),obs(M1_sim)))+1)
+  M5_plot <- plot_si(M5_sim, U=U, limit=limit) + ggtitle(expression("(C) "~Model~M[5])) +
+    ylab("City") +
+    xlab("Day") +
+    theme(legend.position = "bottom")
+  M1_plot <- plot_si(M1_sim, U=U, limit=limit) + ggtitle(expression("(B) "~Model~M[1])) +
+    ylab("City") +
+    theme(legend.position = "none", axis.title.x=element_blank(),
+      axis.ticks.x=element_blank(), axis.text.x=element_blank())
+  data_plot <- plot_si(M5, U=U, limit=limit) + ggtitle(expression("(A) "~Data)) + 
+    ylab("City") +
+    theme(legend.position = "none", axis.title.x=element_blank(),
+      axis.ticks.x=element_blank(), axis.text.x=element_blank())
+  data_plot/M1_plot/M5_plot
+})  
+panel_plot
+@
+
+
+
+<<percentile_plot, message=FALSE, echo=FALSE,fig.width=8.5,fig.height=10,out.width="6.5in",fig.cap="Simulated daily case reports for model {\\RevisedModelUnconstrained}, showing the 10th, 50th and 90th percentiles. Within each panel, cities are ordered by population, largest on the bottom row.">>=
+i <- 3
+stew(file=paste0(plotdir,"percentile_df.rda"),{
+  percentile_df <- sim_percentile_si(U=switch(i,5,50,373),Nsim = switch(i,10,100,100), params=mle3)
+})  
+percentile_plot <- plot_percentile_si(percentile_df)
+percentile_plot
+@
+
+Table~\ref{tab:parameters} shows some substantial differences between our parameter estimates and those of \citet{li20}.
+Model~{\RevisedModelUnconstrained}, which has considerably higher likelihood than {\LiMobility} due to the inclusion of dynamic process noise, obtains its highest likelihoods when the pre-lockdown infectious period parameter is unrealistically large.
+In this model, a long duration of infection pre-lockdown does not cause problems because individuals leave the infected class quickly once lockdown arrives.
+Constraining the durations of latency and infection to be the same before and after lockdown changes this, without having substantial effects on other parameter estimates.
+This occurs at the expense of
+$\Sexpr{myround(lik3[1],1)} - (\Sexpr{myround(lik6[1],1)}) = \Sexpr{myround(lik3[1]-lik6[1],1)}$
+units of log-likelihood.
+We cannot readily see why the data prefer a mechanistically implausible infectious period pre-lockdown.
+However, weak identifiability is not surprising in a complex model with many parameters that is required to fit fairly sparse amounts of data pre-lockdown.
+Some model misspecification is also inevitable for a mathematical model of a biological system.
+When weak identifiability and model misspecification co-occur, one possible result is scientifically implausible parameter estimates.
+
+
+Our estimate of the relative transmissibility of unreportable to reportable cases is considerably higher than \cite{li20}.
+Indeed, our estimate during the first time period is $\relativeTransmission^{\before}=\Sexpr{myround(mle3["mu_be1"],2)}$.
+The data are compared to simulations from models {\LiMobility} and {\RevisedModelUnconstrained} in Figure~\ref{fig:panel_plot}. 
+The greater number of cases for model {\RevisedModelUnconstrained} compared to  {\LiMobility} is explained by its higher initial $\Rzero$.
+The variability in {\RevisedModelUnconstrained} is explicitly included in the model and fitted to the data; it therefore matches the variability in the data more closely than  {\LiMobility}.
+If many simulations are made from {\RevisedModelUnconstrained}, the pointwise 10$^{\mathrm{th}}$ percentile is similar to a simulation from {\LiMobility} (Figure~\ref{fig:percentile_plot}).
+The similarity between model {\LiMobility} and \code{li20} is evident by comparing Figure~\ref{fig:panel_plot}(B) with Figure~\ref{fig:li20_plot} in Section~\ref{sec:li20}.
+The code and parameters for the simulation from \code{li20} are taken directly from \citet{li20}.
+
+
+\subsection{\secSep Reporting Delay}
+
+The \code{li23} and \code{li20} models describe the reporting process via the case report compartments, $C^a_u$, $C^b_u$ and $C_u$ for each city, $u$.
+When an individual transitions from $E_u$ to the reportable infectious state, $I_u$, an individual is also added to the start of the reporting process by incrementing $C^a_u$.
+The counts in compartments $C^a_u$, $C^b_u$ and $C_u$ do not affect the transmission dynamics; they only part of the measurement model.
+For this reason, they are denoted by octagons rather than squares in the diagrammatic representation (Figure~1, main text).
+
+\citet{li20} described transitions from $C^a_u$ to $C_u$ using a gamma delay model, with each individual arriving in $C^a_u$ transitioning to $C_u$ after a random delay distributed as $G(a,T_d/a)$, the gamma distribution with mean $T_d$ and variance $T_d^2/a$.
+Based on analysis of early confirmed cases, and preliminary exploration of the model, they specified $a=1.85$, $T_d=9$ before January 23, and $T_d=6$ after January 23.
+We use their values of $T_d$ but use $a=2$ in order to obtain a Markovian representation, where the gamma delay is represented as the sum of two exponential delays, formalized using a compartment $C^b_u$ intermediate between $C^a_u$ and $C_u$. 
+
+Our interpretation of reporting delay leads to a small discrepancy between our \code{li20} model and the model actually specified by \citet{li20}.
+However, the discrepancy is small.
+Further, the Markovian property is necessary for inference using either the ensemble Kalman filter or block particle filter.
+Thus, this discrepancy closes a small gap between the model specified by \citet{li20} and the methods which they (and we) use to analyze the model.
+
+\subsection{\secSep Mobility Data} \label{sec:mobility}
+
+<<zeros_prep,echo=F>>=
+library(metapoppkg)
+m <- mobility
+dim(m) <- c(14,373,373)
+city_names <- colnames(mobility)
+
+# check this is correctly reorganized:
+# all(m[,1,]-mobility[1:14,]==0)
+# all(m[,2,]-mobility[15:28,]==0)
+
+source_city <- 170
+dest_city <- 1
+# plot(m[,dest_city,source_city], xlab="day", ylab=paste(city_names[source_city], "to", city_names[dest_city]))
+
+source_city <- 1
+dest_city <- 2
+# plot(m[,dest_city,source_city], xlab="day", ylab=paste(city_names[source_city], "to", city_names[dest_city]))
+
+# this is the number of cities feeding into a given city on day 1
+# destinations are rows, and sources are columns,
+# so we sum sources for each destination
+# apply(m[1,,]>0,1,sum)
+
+# cities which never have inbound travel 
+no_source <- which(apply(apply(m,c(2,3),sum)>0,1,sum)==0)
+# city_names[no_source]
+
+mean_pop <- apply(matrix(as.numeric(metapoppkg::population[,2]),nrow=30),2,mean)
+# all(unique(population[,1])==city_names)
+names(mean_pop) <- city_names
+# mean_pop[no_source]
+
+# sum(m[,95,]) # no sources to Zhoushan
+
+x <- incidence[,-1] # remove date column
+# apply(x[,no_source],1,sum)
+
+@
+
+
+
+<<zeros_plot,eval=T,fig.height=4,fig.width=4,out.width="3.5in",fig.cap="Total cases, January 10 to February 8, for each city, plotted against mean population size.  Cities with no arriving travelers recorded in the mobility data are shown as solid red points.">>=
+
+par(mai=c(0.8,0.8,0.2,0.2))
+plot(y=apply(x,2,sum)+1,x=mean_pop,log="xy",
+  ylab="total cases + 1",xlab="population")
+points(y=(apply(x,2,sum)+1)[no_source],x=mean_pop[no_source],col="red",pch=19)
+@
+
+Figure~\ref{fig:zeros_plot} shows the \Sexpr{length(no_source)} cities which have no incoming travelers in the mobility dataset compared to other cities.
+We see that the cities modeled as having no sources by \citet{li20} did have relatively few reported cases for their city size, but not a complete absence of caess.
+
+To capture individual movement among the 373 cities simulated in the metapopulation model, \citet{li20} used human mobility data from the Tencent location-based service used in popular Tencent mobile phone applications, such as Wechat, QQ, and Baidu Maps.
+High resolution Tencent data were available for 2018, so they assumed the travel patterns captured in 2018 during the New Year celebrations (Chunyun) are similar to those of the analogous time period during 2020, prior to January 23 travel restrictions.
+In total, 92,248 inter-city travel records were used to represent travel during January 10-23.
+In the Tencent mobility data, for each day, the top 10 outflows from each of 373 Chinese cities were recorded.
+For city-to-city connections for which only some of the days in this two-week time period rank in the top 10, \citet{li20} linearly interpolated missing daily outflow values. 
+
+This procedure resulted in reasonable mobility estimates for most cities, but some cities remained disconnected, with no estimated incoming travelers (Figure~\ref{fig:mobility_travel_vs_size}, A and B).
+Several small cities with few cases might be expected not to have a large impact on the overall analysis.
+However, if their case reports have likelihood $0$ under a model then they can lead to a log-likelihood of $-\infty$ even for an otherwise suitable model.
+
+We therefore added a small amount of additional movement between cities based on a gravity model,
+\begin{equation}
+M_{uj} = M^{\mathrm {li20}}_{uj} + \frac{{\mathcal F} \, \bar{d}}{\bar P(t_0)}\times \frac{ P_u(t_0)  \, P_j(t_0)}{d_{uj}},
+\end{equation}
+where $M^{\mathrm {li20}}_{uj}$ is the movement from city $u$ to $j$ used by \citet{li20}, $P_u(t_0)$ is the initial population in city $u$; $\bar P(t_0)$ is the average population across all 373 cities; $d_{uj}$ is the distance from city $u$ to city $j$; $\bar d$ is the average of this distance over all $(373\times 372)/2$ pairs; $\mathcal F$ is a mobility correction factor which we took as ${\mathcal F}=20$ based on assessment of diagnostic plots.
+Figure~\ref{fig:mobility-graph-plot} shows that this modification does not provide a major distortion to the pattern of travel from the movement data.
+This figure displays only day 1 (January 10), but other days show similar patterns.
+Figure~\ref{fig:mobility_travel_vs_size} gives further evidence for this; the modification is sufficient to move the zero travel records toward the main body of data, but not enough to result in other qualitative changes.
+
+<<mobility_travel_vs_size,fig.cap='Total ingoing and outgoing travel plotted against city size: (A,B) without an adjustment to ensure connectivity; (C,D) with the adjustment. The remaining outliers after adjustment are Sansha (red) and Taiwan (blue)',echo=F>>=
+mob_factor <- 20
+mobi_unadjusted <- metapoppkg::mobility
+mobi_adjusted <- metapoppkg::mobility+metapoppkg::v_by_g_day*mob_factor
+day1_unadjusted <- mobi_unadjusted[1+14*(0:372),]
+day1_adjusted <- mobi_adjusted[1+14*(0:372),]
+out_unadjusted <- colSums(day1_unadjusted)
+in_unadjusted <- rowSums(day1_unadjusted)
+out_adjusted <- colSums(day1_adjusted)
+in_adjusted <- rowSums(day1_adjusted)
+popu <- metapoppkg::population0$Population
+names(popu) <- names(out_adjusted) <- names(in_adjusted) <- colnames(mobi_unadjusted)
+
+travel_range <- range(c(out_unadjusted,out_adjusted,in_unadjusted,in_adjusted))
+
+par(mfrow=c(2,2))
+plot(y=out_unadjusted+1,x=popu, log="xy",
+  ylim=travel_range+1,
+  ylab="Outgoing travel (Jan 10)",xlab="City population", main = "(A)  Unadjusted")
+plot(y=in_unadjusted+1,x=popu,  log="xy",
+  ylim=travel_range+1,
+  ylab="Ingoing travel (Jan 10)",xlab="City population", main = "(B)  Unadjusted")
+plot(y=out_adjusted+1,x=popu,  log="xy",
+  ylim=travel_range+1,
+  ylab="Outgoing travel (Jan 10)",xlab="City population", main = "(C)  Adjusted")
+points(x=popu["Sansha"],y=out_adjusted["Sansha"]+1,pch=16,col="red")
+points(x=popu["Taiwan"],y=out_adjusted["Taiwan"]+1,pch=16,col="blue")
+plot(y=in_adjusted+1,x=popu,  log="xy",
+  ylim=travel_range+1,
+  ylab="Ingoing travel (Jan 10)",xlab="City population", main = "(D)  Adjusted")
+points(x=popu["Sansha"],y=in_adjusted["Sansha"]+1,pch=16,col="red")
+points(x=popu["Taiwan"],y=in_adjusted["Taiwan"]+1,pch=16,col="blue")
+
+@
+
+<<mobility-graph-plot,fig.height=8.5,fig.width=6.5,out.width="6in",fig.cap="Mobility graph for day 1. Top: without adjustment to ensure full connectivity. Bottom: with adjustment. Edge thickness is proportional to movement.">>=
+unadjusted <- plot_dist()+ggtitle("Unadjusted (day 1)")
+adjusted <- plot_dist(mob_modify_factor=20)+ggtitle("Adjusted (day 1)")
+unadjusted/adjusted
+@
+
+
+\clearpage
+
+\subsection{\secSep Comparison with the model and data of \citet{li20}}
+\label{sec:li20}
+
+
+<<li20_plot, message=FALSE, echo=FALSE,fig.width=8.5,fig.height=10,out.width="6.5in",fig.cap="Simulations for 373 cities, comparing (A) a simulation from the model code and parameters provided by \\citet{li20}; (B) a simulation from model {\\LiMobility}; (C) a simulation from model~{\\LiParams}. Within each panel, cities are ordered by population, largest on the bottom row.">>=
+
+stew(file=paste0(plotdir,"li20_plot.rda"),{
+  i <- 3
+  U <-switch(i, 5,50,373)
+  M1 <- spatPomp(li23(U=U,version="li20period3",for_ibpf=F, mob_modify_factor=0),
+               rmeasure=spatPomp_Csnippet(
+                 unit_statenames='C',
+                 code="
+        double* cases=&cases1;
+        int u;
+        for (u = 0; u < U; u++) {
+          if (C[u] > 0.0) {
+            cases[u] = nearbyint(C[u]);
+          } else {
+            cases[u] = 0.0;
+          }
+        } 
+      "
+    )
+  )
+  coef(M1)["sigma_SE1"] <- 0
+  M1_sim <- simulate(M1,seed=100)
+
+  M2 <- li23(U=U,version="li20period3",for_ibpf=F)
+  coef(M2)["sigma_SE1"] <- 0
+  M2_sim <- simulate(M2,seed=100)
+
+  # LPS corresponds to Li, Pei, ..., & Shaman (2020)
+  lps <- read_csv("lps/lps.csv", col_names = F)
+  lps <- as.data.frame(lps)
+  index <- order(colSums(metapoppkg::incidence)[-1], decreasing = T)[1:U]
+  lps <- lps[index,]
+  lps <- data.frame(Value=unlist(lps, use.names=FALSE))
+
+  limit <- log10(max(c(obs(M1_sim),obs(M2_sim),max(log10(lps+1))))+1)
+
+  x <- M1
+  df <- as.data.frame(x)
+  df[x@unit_obsnames] <- log10(lps+1)
+  # change the order, sort by population
+  popu <- df$pop[1:U]
+  index <- order(order(popu, decreasing = T))
+
+  wuhan_index <- which(df$city=="Wuhan")
+  df$Wuhan <- NA
+  df$Wuhan[wuhan_index] <- df$cases[wuhan_index]
+
+  df$y_ticks <- rep(index,30)
+  lps_plot <- ggplot2::ggplot(data = df,
+                            mapping = ggplot2::aes(x = !!rlang::sym(x@timename), y = .data$y_ticks)) +
+  ggplot2::scale_x_continuous(expand=c(0,0)) +
+  ggplot2::scale_y_continuous(expand=c(0,0), sec.axis = sec_axis(~ .)) +
+  ggplot2::geom_tile(mapping = ggplot2::aes(fill = !!rlang::sym(x@unit_obsnames))) +
+  ggplot2::scale_fill_gradient(low = "#FFFFFF", high = "#000000",limits=c(0,limit)) +
+  ggplot2::labs(x = "time",
+                y = "unit",
+                fill = paste("log10\n(",x@unit_obsnames,"+1)",sep="")) +
+  ggnewscale::new_scale("fill") +
+  ggplot2::geom_tile(mapping = ggplot2::aes(fill = .data$Wuhan), data = ~subset(., !is.na(Wuhan))) +
+  ggplot2::scale_fill_gradient(low = "#FFFFFF", high = "#FF0000",limits=c(0,limit)) + 
+  ggplot2::labs(fill = "log10\n(Wuhan+1)") +
+  ggnewscale::new_scale("fill") +
+  
+  ggplot2::theme(
+    axis.text.y=ggplot2::element_blank(),
+    axis.ticks.y=ggplot2::element_blank(),
+    panel.border=ggplot2::element_blank(),
+    axis.line.y = ggplot2::element_line(linewidth = 0.5, linetype = "solid"))
+
+  lps_plot=lps_plot + ggtitle("LPS") + 
+    ylab("City") +
+   theme(legend.position = "none", axis.title.x=element_blank(),
+        axis.ticks.x=element_blank(), axis.text.x=element_blank())
+  M2_plot <- plot_si(M2_sim, U=U, limit=limit) + ggtitle("M2") +
+    ylab("City") +
+    xlab("Day") +
+    theme(legend.position = "bottom")
+  M1_plot <- plot_si(M1_sim, U=U, limit=limit) + ggtitle("M1") +
+    ylab("City") +
+    theme(legend.position = "none", axis.title.x=element_blank(),
+        axis.ticks.x=element_blank(), axis.text.x=element_blank())
+  rm("M1","M1_sim","M2","M2_sim")
+})
+M1_plot <- M1_plot + ggtitle(expression("(B) "~Model~M[1]))
+M2_plot <- M2_plot + ggtitle(expression("(C) "~Model~M[2]))
+lps_plot <- lps_plot + ggtitle("(A)  Model of Li et al. (2020)")
+lps_panel <- lps_plot/M1_plot/M2_plot
+lps_panel
+@
+
+
+\citet{li20} specified the compartment model as a set of ordinary differential equations, with Poisson noise on rates, solved using a 4th-order Runge-Kutta scheme.
+This approach constructs a discrete-time SpatPOMP, with the time discretization corresponding to the measurement times.
+The continuous-time SpatPOMP representation of \code{li23} has some practical advantages:
+\begin{enumerate}
+\item It leads to simpler code. For example, compare the representation of our dynamic model in the R package \pkg{metapoppkg} function \code{li23} with either the code provided by \citet{li20} or our direct adaptation of this code in the function \code{li20} in our \texttt{metapoppkg} package.
+Code simplicity facilitates debugging and consideration of model variations.
+\item It allows inclusion of white noise on transmission rates to generate dynamic overdispersion \citep{breto09,he10,breto11,stocks20}.
+This can lead to better fits to data (measured by likelihood) as well as avoiding over-confident predictions resulting from models that cannot adequately explain the variability in the data.
+\end{enumerate}
+Potentially, similar principles could be incorporated into \code{li20}, but the SpatPOMP framework makes the generalization more straightforward.
+
+We implemented the \code{li20} model of \citet{li20} within the framework of the R package \pkg{spatPomp} \citep{asfaw23arxiv}.
+The model is constructed by the \pkg{metapoppkg} function \code{li20()}.
+This permits reproduction of the methodology used by \citet{li20}  via the \pkg{spatPom} function \code{ienkf}.
+Our implementation of \code{li20} incorporates code adapted from supplementary information provided by \citet{li20}.
+Simulation from \code{li20} using the parameters of \citet{li20} is therefore essentially equivalent to the simulation used by \citet{li20}.
+In Figure~\ref{fig:li20_plot}, we compare a simulation from the code of \citet{li20} with simulations from models~{\LiMobility} and~{\LiParams}.
+We see that \code{li20} and {\LiMobility} look similar; comparing with Figure~\ref{fig:panel_plot} we see that both have distincly less variability than the data.
+The additional variability in {\LiParams} makes it look superficially more like the data, but the additional stochasticity is all ascribed to reporting variability in {\LiParams}; dynamic noise allows a better fit to the data, as documented formally in Table~{\MainResultsTable} and apparent from Figure~\ref{fig:panel_plot}.
+
+
+
+The dataset analyzed by \citet{li20} included 375 cities, but we study only 373.
+We found that two of the 375 cities are duplicates, with two slightly different names for the same town having the same location.
+Also, the island of Hainan was included together with its separate counties---Hainan has a different administrative structure from other Chinese provinces, and does not have prefecture cities.
+We removed the aggretated region of Hainan.
+We modified some of the population values used by \citet{li20}.
+When there was a major discrepancy between the value in their dataset and the prefecture population reported by Wikipedia, we took the latter.
+The largest change was updating the population of Ezhou to 1,079,353 from 59,500.
+Complete details of all our modifications to the dataset used by \citet{li20} are reported in the \code{metapop} package.
+
+\section{\secSep Benchmark statistical models}
+
+Basic statistical models, such as linear regression models or autoregressive-moving average (ARMA) time series models, or even independent random sample models, provide a baseline estimate of the predictability of the system under investigation.
+A standard measure of this predictability is the log-likelihood \citep{gneiting07}, and it is therefore appropriate to compare log-likelihoods for different models calculated for the same data.
+A sophisticated mechanistic model might be expected to have higher predictive skill, and therefore a higher log-likelihood, than a simple statistical model.
+However, mechanistic models may be informative for what they cannot explain as well as what they can:
+so far as a mechanistic model captures current understanding of the science of a system, we are interested to know when and where this science is inadequate to explain the data.
+By contrast, statistical models are designed solely to provide a statistical fit.
+If a mechanistic model fits substantially worse than a simple statistical model, one may infer that there is considerable room to improve the mechanistic model.
+If the mechanistic model is competitive with non-mechanistic alternatives, regardless of whether its likelihood is actually higher, we infer that the mechanistic model provides a plausible explanation of the data.
+Plausible mechanistic models can then be compared against each other by likelihood, with protection from the concern of infering support for one model by comparison against a weak ``straw man'' alternative.
+The use of benchmark likelihoods is demonstrated by \citep{king08,he10,wheeler23}.
+Here, we use two benchmarks:
+
+\noindent (i) A negative binomial model which is independent and identically distributed (IID) for each time point with a unit, with a unit-specific mean. We parameterize the model in terms of its mean and variance, as
+\begin{equation}
+\E[Y_{u,n}]=\mu_u\quad\text{and}\quad \var{Y_{u,n}} = \mu_u + \mu_u^2/s,
+\end{equation}
+where $s$ is a scale parameter.
+
+\noindent (ii) An autoregressive negative binomial model, where the count $Y_{u,n}$ is modeled as negative binomial conditional on $Y_{u,n-1}$ with mean and variance given by
+\begin{equation}
+\E\big[Y_{u,n}|Y_{u,n-1}\big]=\mu_u + \phi Y_{u,n-1} \quad\text{and}\quad  \var\big[Y_{u,n}|Y_{u,n-1}\big] = \mu_u + \phi Y_{u,n-1} + \big(\mu_u+ \phi Y_{u,n-1}\big)^2/s,
+\end{equation}
+with the convention that $Y_{u,0}=0$.
+
+We did not adopt the previously used log-ARMA benchmark, because it is inappropriate for count data with many zeros.
+The likelihood was optimized using \code{optim} in R.
+
+%%%%%%%%%%%%%%%%%%%%%%%%% bpfilter and ibpf %%%%%%%%%%%%%%%%%%%%%%
+
+\section{\secSep The block particle filter and iterated block particle filter}
+\label{sec:bpfilter}
+
+We use the block particle filter of \citet{rebeschini15} implemented as \code{bpfilter} in the \pkg{spatPomp} package \citep{asfaw23arxiv}.
+A filter can evaluate the likelihood function but is not directly concerned with parameter estimation.
+Iterated block particle filters for parameter estimation were developed by \citet{ning23} and \citet{ionides22} and are implemented as \code{ibpf} in \pkg{spatPomp}.
+Here, we give in informal introduction to \code{bpfilter} and \code{ibpf}.
+
+The particle filter \citep{arulampalam02,doucet11} can be heuristically understood as Darwinian evolution operating on a swarm of particles.
+Between consecutive observation times, each particle follows a random trajectory of the stochastic dynamic system.
+This randomness is analogous to Darwinian mutation.
+At an observation time, the particles are resamples with weights corresponding to the conditional density of the data given the location of the particle.
+The weights are Darwinian fitness, and the resampling is Darwinian natural selection.
+
+
+\begin{figure}[!ht]
+\begin{center}
+\begin{tikzpicture}[
+  square/.style={rectangle, draw=black, minimum width=5.5cm, minimum height=0.7cm, rounded corners=.1cm,font=\ttfamily},
+  block/.style={rectangle, draw=black, minimum width=1.5cm, align=center, rounded corners=.1cm,font=\ttfamily},
+  >/.style={shorten >=0.4mm}, % redefine arrow to stop short of node
+  >/.tip={Stealth[length=2.5mm,width=1.5mm]} % redefine arrow style
+]
+\tikzset{>={}}; % this is needed to implement the arrow redefinition
+  \node (initialize)   at (0,7.3)  [square] {Initialize model \& parameters};
+  \node (perturb)    at (0,6) [square,fill=blue!8] {Perturb parameters};
+  
+  \node (predict)  at (0,4.7)  [square] {Predict:~stochastic dynamics};
+  
+  \node (reweight1) at (-3,3)  [block] {Reweight \\ Block 1};
+  \node (reweight2) at (-1,3)  [block] {Reweight\\ Block 2};
+  \node (reweight3) at (1,3) {\texttt{...}};
+  \node (reweightK) at (3,3)  [block] {Reweight\\ Block K};
+
+  \node (resample1) at (-3,1.5)  [block] {Resample\\state};
+  \node (resample2) at (-1,1.5)  [block] {Resample\\ state};
+  \node (resampleK) at (3,1.5)  [block] {Resample\\ state};
+
+  \node (resample3) at (1,1) {\texttt{...}};
+
+  \node (params1) at (-3,0.5)  [block, fill=blue!8] {Resample\\ params};
+  \node (params2) at (-1,0.5)  [block, fill=blue!8] {Resample\\ params};
+  \node (paramsK) at (3,0.5)  [block, fill=blue!8] {Resample\\ params};
+
+  \node (recombine) at (0,-1.2)  [square] {Recombine};
+
+  \node (N) at (5.5,3)  [draw,diamond,aspect=1.5] {\texttt{n=1:N}};
+  \node (M) at (7.5,3)  [draw,diamond,aspect=1.5,fill=blue!8] {\texttt{m=1:M}};
+  \node (mysouth) at (0,-1.8) {};
+
+  \draw[->] (initialize.south) -- (perturb.north);
+  \draw[->] (perturb.south) -- (predict.north);
+  \draw[->] (predict) -- (reweight1.north);
+  \draw[->] (predict) -- (reweight2.north);
+  \draw[->] (predict) -- (reweightK.north);
+  \draw[->] (reweight1) -- (resample1);
+  \draw[->] (reweight2) -- (resample2);
+  \draw[->] (reweightK) -- (resampleK);
+  
+  \draw[->] (params1.south) -- (recombine);
+  \draw[->] (params2.south) -- (recombine);
+  \draw[->] (paramsK.south) -- (recombine);
+  \draw[->] (recombine.east) -- (recombine -| N) -- (N);
+  \draw[->] (N) -- (perturb -| N) -- (perturb); 
+  \draw[->] (recombine.south) -- (mysouth -| recombine.south) -- (mysouth -| M) -- (M);
+ \draw[->] (M) -- (initialize -| M) -- (initialize);
+\end{tikzpicture}
+
+\end{center}
+\caption{A flow diagram for an iterated block particle filter. The outer loop ($m=1,\dots,M$) enables parameter estimation, when combined with the perturbation and resampling of the parameters.} \label{fig:ibpf}
+\end{figure}
+
+
+Iterated filtering algorithms add perturbations to the parameters of each particle.
+Thus, the natural selection of particles favors parameter values consistent with the data, giving rise to algorithms that approach the maximum likelihood estimate \citep{ionides06,ionides15}.
+A diagram representing an iterated block particle filter is showh in Figure~\ref{fig:ibpf}.
+
+
+The performance of particle filters decays rapidly with the dimension of the latent state \citep{bengtsson08}.
+Iterated particle filters suffer from the same curse of dimensiounality.
+Block particle filters avoid this curse by partitioning the latent states into weakly dependent units, and resampling separately on each unit.
+This is analogous to recombination in sexual reproduction, with each block corresponding to a chromosome.
+The recombination allows successful blocks of one particle to join up with different successful blocks from another particle.
+If this approximation permits effective high-dimensional filtering then the parameter perturbation strategy can be employed for parameter estimation, just as for basic particle filters.
+
+
+\subsection{Log-likelihood estimation via filtering}
+\label{sec:loglik:comparison}
+
+For our primary goal of carrying out inference on unknown model parameters, the principal motivation for filtering is to obtain an estimate of the log-likelihood.
+The log-likelihood is the probability density of the model, evaluated at the data, viewed as a function of the model parameters, defined as
+\begin{equation}
+\loglik(\theta)= \log\left(f_{Y_{1:N}}(y^*_{1:N} ; \theta)\right),
+\end{equation}
+This quantity is fundamental for likelihood-based inference, including maximum likelihood estimation and Bayesian inference (via combination of the likelihood with prior beliefs).
+
+The recursive nature of a filtering algorithm suggests using a likelihood decomposition
+\begin{equation}
+f_{Y_{1:N}}(y^*_{1:N} ; \theta) = \prod_{n=1}^N f_{Y_n|Y_{1:n-1}}(y^*_n|y^*_{1:n-1} ; \theta).
+\end{equation}
+The requirement of a filtering algorithm is to provide an approximation to
+\[
+f_{X_n|Y_{1:n}}(x_n|y^*_{1:n} ; \theta),
+\]
+though many (including EnKF) also provide an approximation to the one-step prediction distribution, say
+\[
+f^P_{X_{n+1}|Y_{1:n}}(x_{n+1}|y^*_{1:n};\theta)\approx f_{X_{n+1}|Y_{1:n}}(x_{n+1}|y^*_{1:n} ; \theta).
+\]
+The  approximations $f^P_{X_{n+1}|Y_{1:n}}$ together with a measurement density can be used to construct a model defined by a joint probability density,
+\begin{equation}\label{f^P}
+f^P(y_{1:N};\theta)=\int \prod_{n=1}^N f_{Y_n|X_n}(y_n|x_n;\theta)
+f^P_{n+1}(x_{n+1}|y_{1:n};\theta) \, dx_{1:N},
+\end{equation}
+with corresponding likelihood and log-likelihood functions,
+\[
+\lik^P(\theta) = f^P(y^*_{1:N};\theta), \hspace{1cm} \loglik^P(\theta)=\log \lik^P(\theta).
+\]
+Since $f^P_{X_{n+1}|Y_{1:n}}$ is an approximation, $\lik^P(\theta)$ does not exactly match the likelihood of the proposed model.
+We call $\lik^P(\theta)$ the predictive likelihood of the filtering algorithm applied to the model.
+It can be viewed as the exact likelihood of the approximate model for the data defined by, rather than the approximate likelihood of the original target model.
+This perspective implies that, if the proposed model is correct, the expected value of $\loglik^P(\theta) $, viewed as a random function of $Y_{1:N}$, is lower than  $\loglik(\theta)$ since log-likelihood is a proper scoring rule \citep{gneiting07}.
+Therefore, it is appropriate to compare filtering methods by their predictive likelihoods.
+
+\begin{figure}
+\begin{center}
+\includegraphics[width=15cm]{../filter_tests/filter_tests8.png}
+\end{center}
+\caption{Comparing filters on simulated data from model \code{li23}. ABF is the adapted bagged filter \citep{ionides21}; ABF-IR is the adapted bagged filter with intermediate resampling \citep{ionides21}; BPF is the block particle filter; EnKF is the ensemble Kalman filter; GIRF is the guided intermediate resampling filter \citep{park19}; PF is the particle filter; UBF is the unadapted bagged filter \citep{ionides21}.}\label{fig:filter_test}
+\end{figure}
+
+To investigate the suitability of the block particle filter for this data analysis, we compared log-likelihood evaluation from various filters available in the \pkg{spatPomp} package.
+We used simulated data from our maximum likelihood estimate so that the comparison is made on a correctly specified model, because we do not want to assess filters based on how well they compensate for model misspecification.
+For a correctly specified model, the best possible expected log-likelihood arises for an ideal filter; in other words, log-likelihood is a proper scoring method for filters \citep{gneiting07}.
+Figure~\ref{fig:filter_test} shows that the block particle filter performs well on this task.
+The particle filter is effective for up to $U=5$ cities, but (as theory predicts) its performance starts declining rapidly as dimension increases.
+The particle filter gives an unbiased and consistent Monte Carlo estimate of the likelihood, so we can tell from Figure~\ref{fig:filter_test} that the block approximation is effective for small $U$ since is it does not fall far behind the particle filter in situations where the latter is known to give essentially exact results.
+However, the block particle filter continues to operate successfully for large $U$, when the particle filter fails.
+Two bagged filters (ABF and UBF) also perform well, however their structure is not well suited to parameter estimation via iterated perturbed filtering \citep{ionides21}.
+The particle filters using guided intermediate resampling (ABF-IR and GIRF) are computationally expensive; in principle, they have good scalability properties, however, their \pkg{spatPomp} implementation performs less well than the unguided filters in this experiment.
+
+The algorithmic settings for Figure~\ref{fig:filter_test} were set for comparable computing times in the \pkg{spatPomp} implementation.
+Full details are available in the published source code.
+Different algorithms have different demands in terms of number of computations, memory requirements, and parallelizability.
+All these algorithms have various tuning parameters, so we do not rule out the possibility that the numerical comparisons are dependent on details of the implementation.
+Figure~\ref{fig:filter_test} is similar to Figure~3 of \citet{ionides21}, that shows an equivalent filter comparison for a longer collection of time series of an endemic viral disease, namely pre-vaccination measles.
+Different relative performance results can be obtained on other model classes, for example in a linear Gaussian model (Figure~1 of \citet{ionides21}) or the Lorenz~96 geophysical model (Figure~S3 of \citet{ionides21}).
+Figure~\ref{fig:filter_test} therefore adds to the growing body of evidence that block particle filters are well suited to metapopulation models.
+
+\subsection{\secSep Limitations of IBPF}
+
+Simulation-based methods are computationally intensive.
+IBPF requires thousands of simulations in each of hundreds of filtering iterations.
+In practice, this limits the applicability to a moderate scale, say, hundreds of units.
+
+IBPF approximates a full-information maximum-likelihood analysis, yet both the likelihood evaluation and maximization are subject to errors that could become scientifically significant.
+IBPF builds on the block particle filter, and so IBPF cannot expect to succeed in situations where BPF fails.
+However, it is possible for IBPF to fail in situations where BPF succeeds, 
+We discuss separately these two requirements for success of IBPF.
+
+BPF has good scalability properties, but an approximation error which can be large when the model is not a good match for the method.
+The theory within which BPF has small approximation error assumes that dependence decays suitably quickly with distance between units \citep{rebeschini15}.
+The theory for IBPF, in the case where all parameters are unit-specific, has a similar requirement, but on an extended model where the latent state at each unit is augmented with a parameter vector carrying out a random walk.
+There is not yet a comparable theory for the shared parameter extension of IBPF proposed and demonstrated by \citet{ionides22}, but a similar requirement is probably needed.
+
+The size of an initial infected population at a single source unit, Wuhan for COVID-19, is an example of a potentially problematic parameter to estimate via IBPF.
+In the extended model, this parameter is local to the state at Wuhan, and yet it is important for the dynamics of other units.
+Fortunately, the initialization procedure does award this parameter some direct effect on the initial number of infections in other units, which the algorithm can harness.
+Without this, the IBPF algorithm would lose any power for events outside the block containing Wuhan to inform the initial state in Wuhan.
+
+Determining the success of a filter, in a particular application, is an empirical task.
+Many filters, including BPF and the basic particle filter, evaluate the log-likelihood by constructing a sequence of one-step predictive distributions which do not have access to future data.
+The log-likelihood is a proper scoring rule for such forecasts \citep{gneiting07}, meaning that, if the model is correct, no other predictive distribution can have higher expected log-likelihood.
+This motivates comparison of filters by their estimated log-likelihood: the higher, the better.
+
+Caution is required in the presence of model misspecification.
+For example, the model may place zero probability on specific latent state values, yet these states may become possible in a block particle filter due to the block resampling.
+If the data favor these inconsistent values (an indication of model misspecification) then the block particle filter may have much higher likelihood that an ideal filter.
+For this reason, we recommend that experimentation to determine the choice of filter should be carried out on simulated data as well as the actual data.
+If the conclusions are different in these two scenarios, that is an indication of model misspecification.
+
+%%%%%%%%%%%%%%%%%%%%% enkf and ienkf %%%%%%%%%%%%%%%%%%
+
+\section{\secSep The ensemble Kalman filter (EnKF) and its use for metapopulation models}
+\label{sec:enkf}
+
+\begin{algorithm}[tb]
+  \caption{EnKF algorithm \citep[adapted from][]{asfaw23arxiv}}\label{alg:enkf}
+  \KwIn{simulator for the transition density, $f_{\myvec{X}_{\ttime}|\myvec{X}_{\ttime-1}}(\myvec{x}_{\ttime} \given \myvec{x}_{\ttime-1}\giventh\theta)$, and initial density, $f_{\myvec{X}_0}(\myvec{x}_0\giventh\theta)$;
+    evaluator for expectation of $Y_{\unit,\ttime}$ given $X_{\unit,\ttime}=x$, ${\emeasure}_{\unit}(x,\theta)$, and corresponding variance, ${\vmeasure}_{\unit}(x,\theta)$;
+    parameter, $\theta$;
+    data, $\data{\myvec{y}}_{1:\Time}$;
+    number of particles, $J$.
+  }
+  initialize filter particles,
+  $\myvec{X}_{0}^{F,\np}\sim {f}_{\myvec{X}_{0}}\left(\mydot\giventh{\theta}\right)$
+  for $\np$ in $\seq{1}{\Np}$
+  \;
+      \For{$\ttime\ \mathrm{in} \ \seq{1}{\Time}$}{
+        prediction ensemble,
+    $\myvec{X}_{\ttime}^{P,\np}\sim {f}_{\myvec{X}_{\ttime}|\myvec{X}_{\ttime-1}}\big(\mydot|\myvec{X}_{\ttime-1}^{F,\np};\theta\big)$
+    for $\np$ in $\seq{1}{\Np}$
+    \nllabel{alg:enkf:prediction}
+    \;
+        centered prediction ensemble, $\tilde{\myvec{X}}_{\ttime}^{P,\np} =
+        \myvec{X}_{\ttime}^{P,\np} - \frac{1}{\Np}\sum_{\altNp=1}^{\Np}\myvec{X}_{\ttime}^{P,\altNp}$
+       for $\np$ in $\seq{1}{\Np}$
+    \;
+        forecast ensemble, $\myvec{\hat{Y}}^{\np}_{\!\ttime}={\emeasure}_{\unit}(X_{\unit,\ttime}^{P,\np},\theta)$
+       for $\np$ in $\seq{1}{\Np}$
+        \nllabel{alg:enkf:forecast}
+        \;
+	forecast mean, $\overline{\myvec{Y}}_{\!\ttime}=\frac{1}{\Np}\sum_{\np=1}^{\Np}\myvec{\hat{Y}}^{\np}_{\!\ttime}$
+	\;
+        centered forecast ensemble, $\myvec{\tilde{Y}}^{\np}_{\ttime} =
+        \myvec{\hat{Y}}^{\np}_{\!\ttime} - \overline{\myvec{Y}}_{\!\ttime}$
+       for $\np$ in $\seq{1}{\Np}$
+        \;
+        forecast measurement variance,
+	$R_{\unit,\altUnit} = \mathbbm{1}_{\unit,\altUnit} \,
+	  \frac{1}{\Np}\sum_{\np=1}^{\Np}
+	    {\vmeasure}_{\unit}\big(
+	      \myvec{X}_{\unit,\ttime}^{P,\np},\theta\big)$
+         \nllabel{alg:enkf:cond:var}
+	 for $\unit, \altUnit$ in $\seq{1}{\Unit}$
+        \;
+        forecast estimated covariance, $\Sigma_{Y}= \frac{1}{\Np-1}\sum_{\np=1}^{\Np}(\myvec{\tilde{Y}}^{\np}_{\!\ttime})(\myvec{\tilde{Y}}^{\np}_{\!\ttime})^T + R$
+        \;
+        prediction and forecast sample covariance, $\Sigma_{XY}=\frac{1}{\Np-1}\sum_{\np=1}^{\Np}(\tilde{\myvec{X}}_{\ttime}^{P,\np})(\myvec{\tilde{Y}}^{\np}_{\!\ttime})^T$
+        \;
+        Kalman gain, $K = \Sigma_{XY}\Sigma_{Y}^{-1}$
+	\nllabel{alg:enkf:kalman_gain}
+        \;
+        artificial measurement noise, $\myvec{\epsilon}_{\ttime}^{\np}\sim \normal(\myvec{0},R)$
+	for $\np$ in $\seq{1}{\Np}$
+        \nllabel{alg:enkf:artificial:noise}
+        \;
+        errors, $\myvec{r}_{\ttime}^{\np}= \myvec{\hat{Y}}^{\np}_{\!\ttime} - \data{\myvec{y}}_{\ttime}$
+	for $\np$ in $\seq{1}{\Np}$
+        \;
+        filter update,
+        $\myvec{X}_{\ttime}^{F,\np} = \myvec{X}_{\ttime}^{P,\np} +
+              K\big( \myvec{r}_{\ttime}^{\np}+\myvec{\epsilon}_{\ttime}^{\np}\big)$
+	for $\np$ in $\seq{1}{\Np}$
+        \nllabel{alg:enkf:update}
+	\;
+	$\loglik_{\ttime}=\log \big[ \phi\big(\data{\myvec{y}}_{\ttime} \giventh \overline{\myvec{Y}}_{\!\ttime} , \Sigma_{Y} \big) \big]$ where $\phi(\cdot\giventh \myvec{\mu},\Sigma)$ is the $\normal(\myvec{\mu},\Sigma)$ density.
+      }
+  \KwOut{
+    filter sample, $\myvec{X}^{F,1:\Np}_{\ttime}$, for $n$ in $\seq{1}{N}$;
+    log likelihood estimate, $\loglik^{\mbox{\tiny{EnKF}}}=\sum_{\ttime=1}^{\Time} \loglik_{\ttime}$
+  }
+\end{algorithm}
+
+EnKF algorithms \citep{evensen22} have proved effective for moderately nonlinear, non-Gaussian data assimilation tasks with large amounts of data.
+Algorithm~\ref{alg:enkf} gives pseudocode for an EnKF algorithm, using notation for SpatPOMP models consistent with the \pkg{spatPomp} R package \citep{asfaw23arxiv}.
+EnKF algorithms update each member of an ensemble using a Kalman gain, constructed in line~\ref{alg:enkf:kalman_gain} of Algorithm~\ref{alg:enkf}.
+This linear update rule corresponds to an ideal filter (i.e., the Kalman filter) when the observations and latent states are jointly linear and Gaussian.
+The nonlinear and non-Gaussian behavior permitted in the prediction step (line~\ref{alg:enkf:prediction}) makes some appropriate adaptation for general SpatPOMP models, but does not in general guarantee a good approximation to the ideal nonlinear filter.
+We see in Figure~\ref{fig:filter_test} that the performance of EnKF on the \code{li23} model falls substantially below some filters with nonlinear update rules.
+
+
+A technical requirement for proper likelihood-based comparison of two models is that the likelihoods are calculated with respect to the same base measure.
+This technical consideration can become important in the context of EnKF since this algorithm is motivated by a continuous, real-valued probability distribution (the Gaussian distribution) yet is applied to discrete, integer-valued metapopulation models.
+When population counts are not small, evaluating a Gaussian probability density function at integer values may be a close approximation to the probability mass function of a discrete model.
+However, when counts are small, we may encounter a situation where the prediction variance is small, in which case the Gaussian probability density is unbounded.
+By contrast, a valid probability mass function (i.e., a discrete probability density with respect to counting measure) can never attain values higher than 1.
+
+\citet{li20} prevented this issue by putting a lower bound of $4$ on the observation variance for their EnKF implementation.
+We implemented their approach in our EnKF calculations for Figure~\ref{fig:filter_test}, by replacing $V_{\unit,n}$ in equation (\ref{eq:vunit_measure}) with
+\begin{equation}
+\label{eq:vunit_measure_enkf}
+V_{\unit,n}=\min(4,C_{\unit,n}^2/4)
+\end{equation}
+when carrying out inference via the ensemble Kalman filter.
+Further, \citet{li20} introduce a measure of discrepancy between the fitted model and the data which they call log-likelihood but which is not an approximation to the statistical quantity $\lik(\theta)$.
+The quantity shown in their Figure~1, and described in their supplementary Section~8, could be viewed as an approximation to a pseudo-log-likelihood \citep{besag74}.
+However, this quantity is not the predictive log-likelihood of any model, and cannot properly be compared with log-likelihoods from alternative models.
+An alternative approach for employing EnKF algorithms with discrete data is to embed EnKF within a Markov chain Monte Carlo algorithm \citep{katzfuss19}.
+
+\subsection{Mismatches between the model and the EnKF specification}
+
+Modifications to the EnKF implementation may improve filtering but break the correspondence between the algorithm and the postulated model.
+For example, \citep{li20} use a measurement variance that depends on the observation itself, which superficially suggests the mathematically inconsistent expression
+\[
+\var(Y_n|X_n) = \min(4,Y_n^2/4).
+\]
+Filtering may proceed with this variance specification, but it does not correspond to a valid predictive distribution since a conditional variance for $Y_n$ cannot depend on $Y_n$.
+
+Some mismatch between the predictive likelihood and the actual model likelihood occurs whenever using numerical methods.
+Inference is necessarily based on the numerically implementation of the filtered model and its likelihood, implying that the predictive likelihood is a proper measure of fit for the procedure actually implemented.
+As pointed out in Sec.~\ref{sec:loglik:comparison}, a filter generating a legitimate predictive likelihood is penalized for infelicity to the intended model, so far as the intended model fits the data.
+This permits likelihood-based comparison candidate filters as well as candidate models.
+However, a non-predictive likelihood approximation calculated requires additional care in its interpretation; use of future information could lead to higher likelihoods than can be obtained by even an ideal filter.
+If it is expedient to use a non-predictive likelihood approximation, this issue requires care. 
+
+%\clearpage
+
+\section{\secSep Estimation for the unconstrained model, {\RevisedModelUnconstrained}}
+\label{sec:unconstrained_estimation}
+
+<<be_profiles_uc,fig.height=6.5, fig.width=5.5, out.width="5in",fig.align='center', message=FALSE, echo=FALSE, warning=FALSE, fig.cap='Profile log-likelihood for model {\\RevisedModelUnconstrained} parameters before lockdown: $\\mathcal{R}_0^{\\before}$, $Z^{\\before}$, $D^{\\before}$, $\\mu^{\\before}$ and $\\beta^{\\before}$.'>>=
+
+R0_be_plot_uc + Z_be_plot_uc + D_be_plot_uc + mu_be_plot_uc + Beta_be_plot_uc + alpha_be_plot_uc +
+  plot_layout(ncol=2) 
+@
+
+
+<<af_profiles_uc,fig.height=6.5, fig.width=5.5, out.width="5in",fig.align='center', message=FALSE, echo=FALSE, warning=FALSE, fig.cap='Profile log-likelihood for model {\\RevisedModelUnconstrained} parameters after lockdown: $\\mathcal{R}_0^{\\after}$, $Z^{\\after}$, $D^{\\after}$, $\\mu^{\\after}$, $\\beta^{\\after}$ and $\\alpha^{\\after}$.'>>= 
+
+
+
+R0_af_plot_uc + Z_af_plot_uc + D_af_plot_uc + mu_af_plot_uc + Beta_af_plot_uc + alpha_af_plot_uc +
+  plot_layout(ncol=2)
+@
+
+<<constant_profiles_uc,fig.height=6.5, fig.width=5.5, out.width="5in",fig.align='center', message=FALSE, echo=FALSE, warning=FALSE, fig.cap='Profile log-likelihood for model {\\RevisedModelUnconstrained} parameters which are unaffected by lockdown: $\\tau$, $\\theta$, $\\sigma_{SE}$, $A_0$ and $E_0$.'>>=
+
+A_0_plot_uc + E_0_plot_uc + sigma_SE_plot_uc + tau_plot_uc + theta_plot_uc +
+  plot_layout(ncol=2)
+@
+
+
+We calculated profile likelihoods for each parameter in {\RevisedModelUnconstrained}, in order to assess identifability and obtain confidence intervals.
+Profile likelihood involves fixing one parameter at a range of values while maximizing the log-likelihood with respect to all the other estimated parameters.
+We use Monte Carlo adjusted profile (MCAP) methodology which provides a way to construct likelihood-based confidence intervals in situations where Monte~Carlo variability in maximization and evaluation of the log-likelihood is too large to ignore \citep{ionides17,ning21}.
+An estimate of the profile likelihood is obtained by applying a smoothing algorithm (such as a smoothing spline) to these noisy evaluations.
+The MCAP confidence interval selects the region of the estimated profile above a cutoff value, where the cutoff is chosen to combine the statistical uncertainty of the ideal (inaccessible) likelihood function with the Monte Carlo variability of the available estimate of the likelihood function.
+MCAP is not appropriate when the maximum likelihood occurs on the boundary of the parameter space, which occurs here for the initial unobserved cases, $A_0$, and the initial relative transmissibility, $\mu^{\before}$.
+For these parameters we therefore used a basic likelihood ratio test on the smoothed likelihood, unadjusted for Monte Carlo error.
+
+
+The resulting profiles are shown in Figures~\ref{fig:be_profiles_uc},~\ref{fig:af_profiles_uc} and~\ref{fig:constant_profiles_uc}.
+We see from Figure~\ref{fig:be_profiles_uc} that $\infectiousPeriod^{\before}$ is weakly identified, and arbitrarily high values of this parameter can be consistent with the data.
+In this model, the mean 9-day distributed delay in reporting  means that the initial dynamics cannot have many visible consequences in the early data.
+This is consistent with the absence of reported cases in the first 6 days of the dataset.
+However, as a consequence, the data have limited ability to identify model parameters, increasing the possibility that certain parameters, or combinations of parameters, have large statistical uncertainty.
+We resolved this situation by adding two constraints, $\infectiousPeriod^{\before}=\infectiousPeriod^{\after}=\infectiousPeriod$ and $\latency^{\before}=\latency^{\after}=\latency$, to obtain the constrained model, {\RevisedModelConstrained}.
+
+%\clearpage
+
+\section{\secSep Estimation for the constrained model, {\RevisedModelConstrained}}
+\label{sec:constrained_estimation}
+
+
+
+<<be_profiles_c,fig.height=4.5, fig.width=5.5, out.width="5in",fig.align='center', message=FALSE, echo=FALSE, warning=FALSE, fig.cap='Profile log-likelihood for model {\\RevisedModelConstrained} parameters before lockdown: $\\mathcal{R}_0^{\\before}$, $\\mu^{\\before}$ and $\\beta^{\\before}$.'>>=
+
+R0_be_plot_c  + mu_be_plot_c + Beta_be_plot_c + alpha_be_plot_c +
+  plot_layout(ncol=2) 
+@
+
+
+<<af_profiles_c,fig.height=4.5, fig.width=5.5, out.width="5in",fig.align='center', message=FALSE, echo=FALSE, warning=FALSE, fig.cap='Profile log-likelihood for model {\\RevisedModelConstrained} parameters after lockdown: $\\mathcal{R}_0^{\\after}$, $\\mu^{\\after}$, $\\beta^{\\after}$ and $\\alpha^{\\after}$ in model {\\RevisedModelConstrained}'>>= 
+
+
+R0_af_plot_c + mu_af_plot_c + Beta_af_plot_c + alpha_af_plot_c +
+  plot_layout(ncol=2)
+@
+
+<<constant_profiles_c,fig.height=8, fig.width=5.5, out.width="5in",fig.align='center', message=FALSE, echo=FALSE, warning=FALSE, fig.cap='Profile log-likelihood for  model {\\RevisedModelConstrained}  parameters which are unaffected by lockdown: $\\tau$, $\\theta$,  $Z$, $D$, $\\sigma_{SE}$,  $A_0$ and $E_0$.'>>=
+
+A_0_plot_c + E_0_plot_c + sigma_SE_plot_c + tau_plot_c + theta_plot_c + Z_plot_c + D_plot_c +
+  plot_layout(ncol=2)
+  
+@
+
+
+
+Figures~\ref{fig:be_profiles_c},~\ref{fig:af_profiles_c} and~\ref{fig:constant_profiles_c} graph the profile likelihood evaluations and construct the resulting confidence intervals, following the same procedures used for Figures~\ref{fig:be_profiles_uc},~\ref{fig:af_profiles_uc} and~\ref{fig:constant_profiles_uc}.
+For both models~{\RevisedModelUnconstrained} and~{\RevisedModelConstrained}, the initial count of unreportable infections in Wuhan, $A_0$, is indistinguishable from $A_0=0$.
+Evidently, the model prefers to explain the data by placing the initial cases in the latent state, $E$.
+However, the evidence is not strong: the profiles for $A_0$ show compatibility with $A_0=5000$ for a cost of around 25-50 units of log likelihood.
+That is strong statistical evidence in the context of the model under investigation, since a 95\% confidence interval contains only values within around 2 log units.
+
+Formally, confidence intervals (like other forms of model-based statistical inference) are constructed based on a class of models under consideration.
+The meaning of these intervals in the context of models outside the class under consideration is generally unclear.
+However, the flatter the profile, the easier for some relatively small, unmodeled phenomenon to affect the estimate.
+Thus, to understand the robustness of the results to model misspecification, it can be helpful to consider the effect of larger likelihood cutoffs.
+
+
+Standard robust statistical methods concern proper inference when aspects of the model are statistically inadequate, but comparison against appropriate benchmarks provides protection against this type of model misspecification.
+For example, we do not have to be excessively concerned about the possible effect of inappropriate modeling of dependence on confidence intervals if our mechanistic model has a likelihood comparing favorably against associative models having flexible specification of dependence. 
+A different type of model misspecification arises when important explanatory variables are missing, or the postulated causal structures in the model class do not adequately represent reality.
+Such unknowns cannot readily be accounted for in standard error estimates.
+The curvature of the profile likelihood may indicate how robust the results are to small misspecifications.
+For large misspecifications, parameters in differing models may have entirely different causal interpretation, and the respective likelihoods provide a measure of support from the data concering each hypothesis.
+
+
+%\clearpage
+
+\section{\secSep Anomaly analysis}
+
+<<residual-plot,echo=F,fig.height=4,fig.width=6.5,out.width="6.5in",fig.cap='Conditional log-likelihood anomaly for each city at each time point. Panel A corresponds to the best fit for {\\RevisedModelUnconstrained} and panel B the best fit for {\\RevisedModelConstrained}. Points for Wuhan are red squares, and Huangshi are green triangles.'>>=
+
+library(tidyverse)
+library(patchwork)
+
+i <- 2
+U <- 373
+
+# pulls results from code-c.R
+
+out_dir <- paste0("../r1/out_c_",i,"/")
+load(file=paste0(out_dir,"filters.rda"))
+load(file=paste0(out_dir,"ar.rda"))
+rownames(bc3m) <- rownames(bc3sd)
+data_c <- data.frame(
+  day = rep(1:30, each = U),
+  residual = as.numeric(bc3m - t(arc3)),
+  city = rep(rownames(bc3m),30)
+)
+cr3_c <- city_resid3 <- apply(bc3m-t(arc3),1,sum)
+
+
+# pulls results from code-uc.R
+out_dir <- paste0("../r1/out_uc_",i,"/")
+load(file=paste0(out_dir,"filters.rda"))
+load(file=paste0(out_dir,"ar.rda"))
+rownames(bc3m) <- rownames(bc3sd)
+data_uc <- data.frame(
+  day = rep(1:30, each = U),
+  residual = as.numeric(bc3m - t(arc3)),
+  city = rep(rownames(bc3m),30)
+)
+cr3_uc <- city_resid3 <- apply(bc3m-t(arc3),1,sum)
+
+anomaly_range <- range(c(data_c$residual,data_uc$residual)) 
+
+anomaly_c <- ggplot(data_c, aes(x = day, y = residual)) +
+  labs(
+    title= expression(B.~Model~M[6]),  
+    x = "Day", # 1 is Jan 10
+    y = "block conditional log likelihood residual"
+  ) +
+  ylim(anomaly_range) +
+  geom_point(data = subset(data_c, city != "Wuhan"), aes(color = city), size = 2) +
+  geom_point(data = subset(data_c, city == "Wuhan"), aes(color = city), shape = 15, size = 3,color="red") +
+  geom_point(data = subset(data_c, city == "Huangshi"), aes(color = city), shape = 17, size = 3,color="green") +  
+  scale_color_manual(values = c("red" = "red", "green" = "green")) +
+   theme(axis.ticks.y=element_blank(),axis.text.y=element_blank(),
+     axis.title.y=element_blank())
+
+anomaly_uc <- ggplot(data_uc, aes(x = day, y = residual)) +
+  labs(
+    title= expression(A.~Model~M[5]),  
+    x = "Day",
+    y = "Block conditional log-likelihood anomaly"
+  ) +
+  ylim(anomaly_range) +
+  geom_point(data = subset(data_uc, city != "Wuhan"), aes(color = city), size = 2) +
+  geom_point(data = subset(data_uc, city == "Wuhan"), aes(color = city), shape = 15, size = 3,color="red") +
+  geom_point(data = subset(data_uc, city == "Huangshi"), aes(color = city), shape = 17, size = 3,color="green") +  
+  scale_color_manual(values = c("red" = "red", "green" = "green"))
+
+anomaly_uc + anomaly_c
+@
+
+The block particle filter log-likelihood estimate can be decomposed into block conditional log-likelihoods for each city at each time point.
+The total estimated log-likelihood for the full dataset is the sum of these block conditional log-likelihoods.
+Likelihood depends on the units of the measured quantity, leading to a scale-dependent additive constant in the log-likelihood.
+To remove this constant, and to compare the model with a simple statistical prediction, we consider the log-likelihood anomaly, defined to be the model log-likelihood minus the benchmark log-likelihood.
+The log-likelihood anomaly at each time for each block is the corresponding difference for the block conditional log-likelihood.
+These log-likelihood anomalies can be investigated to look for patterns of interest; they are analogous to the residuals (i.e., observations minus predicted values) used for diagnostic analysis of regression models.
+An anomaly for an observation much smaller than $-1$ suggests that the data point is poorly explained by the mechanistic model, in which case it is called an outlier.
+
+The largest outlier for both models~{\RevisedModelUnconstrained} and~{\RevisedModelConstrained} arises for Wuhan on day 18.
+This corresponds to the dramatic increase in reported cases on that day, shown in Figure~\ref{fig:anomalous-cities-plot}.
+This feature is a much more sever anomaly for the constrained model, {\RevisedModelConstrained}.
+Indeed, the difference in the anomalies, which is $\Sexpr{myround( filter(data_uc,city=="Wuhan")$residual[18]-filter(data_c,city=="Wuhan")$residual[18],1)}$ log-likelihood units, is more than enough to explain the difference in maximized log-likelihood between these two models.
+Evidently, the dynamics of the fitted model {\RevisedModelUnconstrained} manage to better explain this outlier by postulating a long latency period and high $\Rzero$ before the lockdown so that there is a larger supply of cases ready to explain the dramatic increase in reported cases on day 18.
+We see that one extreme outlier, which may represent an idiosyncrasy of the reporting process rather than a feature of the underlying dynamics, can have substantial consequences on the fit and the resulting conclusions.
+Essentially, the reported Wuhan cases on day 18 are inconsistent with model~{\RevisedModelConstrained}; it pays a heavy price for this in terms of log-likelihood, but that may not be a scientific concern since it may indeed be the case that the reported peak on day 18 was not a genuine feature of the dynamics.
+Diagnostic protocols for COVID-19 were in their infancy, and changing rapidly, so the anomaly can be explained as a unique event in the reporting system.
+
+The second largest outlier occured on day 16 in Huangshi, a city only 100km from Wuhan.
+Again, this corresponds to a sudden surge in reported cases (shown in Figure~\ref{fig:anomalous-cities-plot}) beyond what the model can account for. 
+
+<<anomalous-cities-plot,echo=F,fig.height=4,fig.width=6.5,out.width='6.5in',fig.cap='Time plot of reported cases in Wuhan (red,dashed) and Huangshi (green,solid).'>>=
+ggplot(incidence, aes(x = Date)) +
+  scale_y_sqrt() +
+  geom_line(aes(y = Wuhan), color = "red", linetype="dashed") +
+  geom_line(aes(y = Huangshi), color = "green", linetype="solid") +
+  labs(
+       x = "Day",
+       y = "Reported cases") +
+  scale_color_identity() # Use specified colors
+
+@
+
+Here, we do not show investigations of anomalies that were carried out while developing our model and correcting errors in the data.
+The need to correct certain population values described in Section~\ref{sec:li20} was identified by looking to explain why some cities had large anomalies.
+Discrepancies between the model and data may be (i) a problem with the model; (ii) an error in the data; (iii) an unavoidable consequence of limitations of the model or data, without being a major flaw in either.
+The first task of data analysis is to identify such discrepancies, since that is prerequisite for evaluating what should be learned from them.
+
+%\clearpage
+
+\section{\secSep The metapoppkg R package}
+\label{sec:metapoppkg}
+
+Source code reproducing the numerical results in the article and this supplement is available at \url{https://github.com:jifanli/metapop_article}.
+The code builds on a software package, \code{metapoppkg}, available at \url{https://github.com:jifanli/metapoppkg}.
+This package provides the dataset and models under consideration, as well as some useful data analysis operations.
+The documentation and unit tests for \code{metapoppkg} help to make the data analysis extendable: they reduce the overhead for subsequent investigators to adapt the analysis we present with variations to the models, data or statistical methods. Extendable data analysis is discussed by \citet{wheeler23}.
+
+The central component of \code{metapoppkg} is the function \code{li23} builds the model described in Section~\ref{sec:li23}.
+The arguments permit specification of the number of spatial units and number of observation times. 
+\code{li20} is similar to \code{li23} but aims to replicate the model form of \citet{li20}, as described in \ref{sec:li20}.
+\code{R0} evaluates the value of $\Rzero$ for a given set of parameter values.
+\code{incidence}, \code{mobility} and \code{population} import the corresponding epidemiological datasets uses for the data analysis.
+The \code{metapoppkg} package builds heavily on the \code{spatPomp} package \citep{asfaw23arxiv}, which in turn builds on the \code{pomp} package \citep{king16}.
+Generic plotting methods for data, simulations, and diagnostic plots are provided by these packages.
+We also use plotting functions designed specifically for the analysis presented here, and made available as the \code{plot\_dist} and \code{plot\_li} functions in \code{metapoppkg}.
+
+\bibliographystyle{apalike}
+\bibliography{../bib-metapop}
+
+\end{document}
+
+
+

@@ -1,0 +1,9 @@
+# s5 continues s4
+
+# s4 made solid progress, moving 5 units of likelihood
+# with fairly low Monte Carlo variability, 
+# so it is natural to see if one can just
+# keep going.
+
+# s1 starts at the mcap_results$mle of each parameter found by profile5
+# s1 uses li23v3
