@@ -451,91 +451,93 @@ options(
 library(tidyverse)
 library(patchwork)
 
-R0_uc_be <- readRDS("../profile8/R0/profile_R0_be_full.rds")[,c("logLik","R0_be1")]
+R0_uc_be <- readRDS("../profile9/R0/profile_R0_be_full.rds")[,c("logLik","R0_be1")]
+R0_uc_be <- R0_uc_be[R0_uc_be$R0_be1<22.5,]
 # rbind(
-#   readRDS("../profile8/R0/out_3/profile_R0_be.rds")[,c("logLik","R0_be1")],
-#   readRDS("../profile8/R0/out_3/profile_R0_be2.rds")[,c("logLik","R0_be1")]
+#   readRDS("../profile9/R0/out_3/profile_R0_be.rds")[,c("logLik","R0_be1")],
+#   readRDS("../profile9/R0/out_3/profile_R0_be2.rds")[,c("logLik","R0_be1")]
 # )
   
-R0_uc_af <- readRDS("../profile8/R0/profile_R0_af_full.rds")[,c("logLik","R0_af1")]
+R0_uc_af <- readRDS("../profile9/R0/profile_R0_af_full.rds")[,c("logLik","R0_af1")]
 # R0_uc_af <- rbind(
-#   readRDS("../profile8/R0/out_3/profile_R0_af.rds")[,c("logLik","R0_af1")],
- #   readRDS("../profile8/R0/out_3/profile_R0_af2.rds")[,c("logLik","R0_af1")]
+#   readRDS("../profile9/R0/out_3/profile_R0_af.rds")[,c("logLik","R0_af1")],
+ #   readRDS("../profile9/R0/out_3/profile_R0_af2.rds")[,c("logLik","R0_af1")]
  # )
 
-Z_uc_be <-  readRDS("../profile8/Z/profile_Z_be_full.rds")[,c("logLik","Z_be1")]
+Z_uc_be <-  readRDS("../profile9/Z/profile_Z_be_full.rds")[,c("logLik","Z_be1")]
 # rbind(
-#   readRDS("../profile8/Z/out_3/profile_Z_be3.rds")[,c("logLik","Z_be1")]
+#   readRDS("../profile9/Z/out_3/profile_Z_be3.rds")[,c("logLik","Z_be1")]
 # )
 
-Z_uc_af <-   readRDS("../profile8/Z/profile_Z_af_full.rds")[,c("logLik","Z_af1")]
+Z_uc_af <-   readRDS("../profile9/Z/profile_Z_af_full.rds")[,c("logLik","Z_af1")]
 # rbind(
-#   readRDS("../profile8/Z/profile_Z_af_full.rds")[,c("logLik","Z_af1")]
+#   readRDS("../profile9/Z/profile_Z_af_full.rds")[,c("logLik","Z_af1")]
 # )
 
-D_uc_be <-  readRDS("../profile8/D/profile_D_be_full.rds")[,c("logLik","D_be1")]
+D_uc_be <-  readRDS("../profile9/D/profile_D_be_full.rds")[,c("logLik","D_be1")]
 # rbind(
-#   readRDS("../profile8/D/profile_D_be_full.rds")[,c("logLik","D_be1")]
+#   readRDS("../profile9/D/profile_D_be_full.rds")[,c("logLik","D_be1")]
 # )
 
-D_uc_af <-   readRDS("../profile8/D/profile_D_af_full.rds")[,c("logLik","D_af1")]
+D_uc_af <-   readRDS("../profile9/D/profile_D_af_full.rds")[,c("logLik","D_af1")]
+D_uc_af <- D_uc_af[D_uc_af$D_af1>1.1,]
 # rbind(
-#   readRDS("../profile8/D/profile_D_af_full.rds")[,c("logLik","D_af1")]
+#   readRDS("../profile9/D/profile_D_af_full.rds")[,c("logLik","D_af1")]
 # )
 
-alpha_uc_be <- readRDS("../profile8/alpha/profile_alpha_be_full.rds")[,c("logLik","alpha_be1")]
+alpha_uc_be <- readRDS("../profile9/alpha/profile_alpha_be_full.rds")[,c("logLik","alpha_be1")]
 # rbind(
-#   readRDS("../profile8/alpha/out_3/profile_alpha_be2.rds")[,c("logLik","alpha_be1")],
-#   readRDS("../profile8/alpha/out_3/profile_alpha_be3.rds")[,c("logLik","alpha_be1")]
+#   readRDS("../profile9/alpha/out_3/profile_alpha_be2.rds")[,c("logLik","alpha_be1")],
+#   readRDS("../profile9/alpha/out_3/profile_alpha_be3.rds")[,c("logLik","alpha_be1")]
 # )
-alpha_uc_be <- alpha_uc_be[alpha_uc_be$alpha_be1>0.02 & alpha_uc_be$alpha_be1<0.2 ,]
+# alpha_uc_be <- alpha_uc_be[alpha_uc_be$alpha_be1>0.02 & alpha_uc_be$alpha_be1<0.2 ,]
 
-alpha_uc_af <-   readRDS("../profile8/alpha/profile_alpha_af_full.rds")[,c("logLik","alpha_af1")]
+alpha_uc_af <-   readRDS("../profile9/alpha/profile_alpha_af_full.rds")[,c("logLik","alpha_af1")]
 # rbind(
-#   readRDS("../profile8/alpha/out_3/profile_alpha_af2.rds")[,c("logLik","alpha_af1")]
+#   readRDS("../profile9/alpha/out_3/profile_alpha_af2.rds")[,c("logLik","alpha_af1")]
 # )
-alpha_uc_af <- alpha_uc_af[alpha_uc_af$alpha_af1>0.2 ,]
+# alpha_uc_af <- alpha_uc_af[alpha_uc_af$alpha_af1>0.2 ,]
 
 mu_uc_be <- rbind(
-  readRDS("../profile8/mu/profile_mu_be_full.rds")[,c("logLik","mu_be1")]
+  readRDS("../profile9/mu/profile_mu_be_full.rds")[,c("logLik","mu_be1")]
 )
 
 mu_uc_af <- rbind(
-  readRDS("../profile8/mu/profile_mu_af_full.rds")[,c("logLik","mu_af1")]
+  readRDS("../profile9/mu/profile_mu_af_full.rds")[,c("logLik","mu_af1")]
 )  
 
 Beta_uc_be <- rbind(
-  readRDS("../profile8/Beta/profile_Beta_be_full.rds")[,c("logLik","Beta_be1")]
+  readRDS("../profile9/Beta/profile_Beta_be_full.rds")[,c("logLik","Beta_be1")]
 )
-Beta_uc_be <- Beta_uc_be[Beta_uc_be$Beta_be1<1.25,]
+Beta_uc_be <- Beta_uc_be[Beta_uc_be$Beta_be1>0.4,]
 
 Beta_uc_af <- rbind(
-  readRDS("../profile8/Beta/profile_Beta_af_full.rds")[,c("logLik","Beta_af1")]
+  readRDS("../profile9/Beta/profile_Beta_af_full.rds")[,c("logLik","Beta_af1")]
 )
 
 A_0_uc <- rbind(
-  readRDS("../profile8/A_0/profile_A_0_full.rds")[,c("logLik","A_01")]
+  readRDS("../profile9/A_0/profile_A_0_full.rds")[,c("logLik","A_01")]
 )
-A_0_uc <- A_0_uc[A_0_uc$A_01<9000 ,]
+# A_0_uc <- A_0_uc[A_0_uc$A_01<9000 ,]
 
 E_0_uc <- rbind(
-  readRDS("../profile8/E_0/profile_E_0_full.rds")[,c("logLik","E_01")]
+  readRDS("../profile9/E_0/profile_E_0_full.rds")[,c("logLik","E_01")]
 )
-E_0_uc <- E_0_uc[E_0_uc$E_01<9000 ,]
+# E_0_uc <- E_0_uc[E_0_uc$E_01<9000 ,]
 
 sigma_SE_uc <- rbind(
-  readRDS("../profile8/sigma_SE/profile_sigma_SE_full.rds")[,c("logLik","sigma_SE1")]
+  readRDS("../profile9/sigma_SE/profile_sigma_SE_full.rds")[,c("logLik","sigma_SE1")]
 )
 
 tau_uc <- rbind(
-  readRDS("../profile8/tau/profile_tau_full.rds")[,c("logLik","tau1")]
+  readRDS("../profile9/tau/profile_tau_full.rds")[,c("logLik","tau1")]
 )
-tau_uc <- tau_uc[tau_uc$tau1>0.2 & tau_uc$tau1<0.6 ,]
+# tau_uc <- tau_uc[tau_uc$tau1>0.2 & tau_uc$tau1<0.6 ,]
 
 theta_uc <- rbind(
-  readRDS("../profile8/theta/profile_theta_full.rds")[,c("logLik","theta1")]
+  readRDS("../profile9/theta/profile_theta_full.rds")[,c("logLik","theta1")]
 )
-theta_uc <- theta_uc[theta_uc$theta1<5 ,]
+# theta_uc <- theta_uc[theta_uc$theta1<5 ,]
 
 maxLogLik_uc <- max(R0_uc_be$logLik,R0_uc_af$logLik,Z_uc_be$logLik,Z_uc_af$logLik,D_uc_be$logLik,
   D_uc_af$logLik,alpha_uc_be$logLik,alpha_uc_af$logLik,mu_uc_be$logLik,mu_uc_af$logLik,Beta_uc_be$logLik,
@@ -1235,7 +1237,8 @@ Top block of rows: parameters constant through time.
 Middle block: parameters estimated for Jan 10-Jan 23.
 Bottom block: parameters estimated for Jan 24-Feb 8.
 Parameters without specified units are dimensionless.
-For {\RevisedModelConstrained}, $\latency^{\before}=\latency^{\after}$, so the two values marked by $^\ast$ are constrained to be equal; $^\dagger$ denotes the constraint $\infectiousPeriod^{\before}=\infectiousPeriod^{\after}$.
+For {\RevisedModelConstrained}, $\latency^{\before}=\latency^{\after}$, so the two values marked by $^\ast$ are constrained to be equal; $^\dagger$ denotes the other constraint $\infectiousPeriod^{\before}=\infectiousPeriod^{\after}$.
+We calculated $\Rzero^{\before}=\big(\alpha^{\before}+(1-\alpha^{\before})\mu^{\before}\big)\infectiousPeriod^{\before}\beta^{\before}$ and  $\Rzero^{\after}=\big(\alpha^{\after}+(1-\alpha^{\after})\mu^{\after}\big)\infectiousPeriod^{\after}\beta^{\after}$.
 }\label{tab:parameters}
 \end{table}
 
@@ -1739,9 +1742,9 @@ Therefore, it is appropriate to compare filtering methods by their predictive li
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=15cm]{../filter_tests/filter_tests8.png}
+\includegraphics[width=15cm]{../filter_tests/filter_tests9.png}
 \end{center}
-\caption{Comparing filters on simulated data from model \code{li23}. ABF is the adapted bagged filter \citep{ionides21}; ABF-IR is the adapted bagged filter with intermediate resampling \citep{ionides21}; BPF is the block particle filter; EnKF is the ensemble Kalman filter; GIRF is the guided intermediate resampling filter \citep{park19}; PF is the particle filter; UBF is the unadapted bagged filter \citep{ionides21}.}\label{fig:filter_test}
+\caption{Comparing filters on simulated data from model \code{li23}. ABF is the adapted bagged filter \citep{ionides21}; ABF-IR is the adapted bagged filter with intermediate resampling \citep{ionides21}; BPF is the block particle filter; EnKF is the ensemble Kalman filter; GIRF is the guided intermediate resampling filter \citep{park20}; PF is the particle filter; UBF is the unadapted bagged filter \citep{ionides21}.}\label{fig:filter_test}
 \end{figure}
 
 To investigate the suitability of the block particle filter for this data analysis, we compared log-likelihood evaluation from various filters available in the \pkg{spatPomp} package.
