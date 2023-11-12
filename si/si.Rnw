@@ -1,3 +1,6 @@
+\documentclass[10pt]{article}
+\pdfoutput=1 
+
 <<knitr-opts, include=FALSE, purl=FALSE>>=
 library(knitr)
 opts_knit$set(concordance=TRUE)
@@ -237,8 +240,6 @@ plot_percentile_si <- function(df_list){
 \renewcommand{\bottomfraction}{.7}
 \renewcommand{\textfraction}{.15}
 \renewcommand{\floatpagefraction}{.66}
-
-\documentclass[10pt]{article}
 
 %% for flow diagrams
 \usepackage{tikz}
@@ -982,13 +983,13 @@ The non-zero transition rates are therefore as follows:
 \rate_{S_{\unit}E_{\unit}} &=& \beta S_{\unit}(t) \left(\frac{I_{\unit}(t)+ \relativeTransmission A_{\unit}(t)}{\pop_{\unit}(t)}\right)
 d\Gamma_{\unit}/dt,
 \\
-\rate_{S_{\unit}T} \eqsep = \eqsep \rate_{E_{\unit}T} \eqsep = \eqsep \rate_{A_{\unit}T} &=& \mobilityFactor \sum_j \frac{M_{\unit j}}{\pop_{\unit}-I_{\unit}},
+\rate_{S_{\unit}T} \eqsep = \eqsep \rate_{E_{\unit}T} \eqsep = \eqsep \rate_{A_{\unit}T} &=& \mobilityFactor \sum_j \frac{M_{\unit j}(t)}{\pop_{\unit}-I_{\unit}},
 \\
-\rate_{TS_{\unit}} &=& \mobilityFactor \sum_j \frac{M_{j \unit} S_{j}}{\pop_{j}-I_{j}},
+\rate_{TS_{\unit}} &=& \mobilityFactor \sum_j \frac{M_{j \unit}(t)\, S_{j}}{\pop_{j}-I_{j}},
 \\
-\rate_{TE_{\unit}} &=& \mobilityFactor \sum_j \frac{M_{j \unit} E_{j}}{\pop_{j}-I_{j}},
+\rate_{TE_{\unit}} &=& \mobilityFactor \sum_j \frac{M_{j \unit}(t)\, E_{j}}{\pop_{j}-I_{j}},
 \\
-\rate_{TA_{\unit}} &=&\mobilityFactor \sum_j \frac{M_{j \unit} A_{j}}{\pop_{j}-I_{j}},
+\rate_{TA_{\unit}} &=&\mobilityFactor \sum_j \frac{M_{j \unit}(t)\,  A_{j}}{\pop_{j}-I_{j}},
 \\
 \rate_{E_{\unit}A_{\unit}} \eqsep = \eqsep \rate_{E_{\unit}I_{\unit}}  &=&  \alpha/Z,
 \\
@@ -999,9 +1000,12 @@ d\Gamma_{\unit}/dt,
 \end{eqnarray}
 We define $d\Gamma_{\unit}/dt$ in (\ref{eq:muSE}) as non-negative multiplicative gamma white noise with variance parameter $\sigma_{SE,\unit}$.
 That is, $\Gamma_{\unit}(t)$ is a gamma process with stationary independent increments, such that $\Gamma_{\unit}(t)-\Gamma_{\unit}(s)$ is gamma distributed with mean $t-s$ and variance $\sigma_{SE}(t-s)$.
-Equations (\ref{eq:dS})-(\ref{eq:muCbC}) specify an overdispersed continuous time Markov process via the limit of a discrete time Euler approximation as the discretization step approaches zero \citep{breto09,breto11}.
-The parameters are described in Table~\ref{tab:parameters}.
+Equations (\ref{eq:dS})-(\ref{eq:muCbC}) therefore specify an overdispersed continuous time Markov process via the limit of a discrete time Euler approximation as the discretization step approaches zero \citep{breto09,breto11}.
 
+The time-varying transport matrix, $M_{\unit j}(t)$, describes the rate of individuals moving from city $u$ to city $j$ at time $t$.
+It is modeled as piecewise constant for each day, and its construction is detailed in Section~\ref{sec:mobility}.
+To compensate for imperfect transport data, we include a calibration constant, $\mobilityFactor$.
+The model parameters are described in Table~\ref{tab:parameters}, together with their units and their fitted values.
 
 Data for city $\unit$ at time $t_n$ is an official report $y^*_{\unit,n}$ recording new cases since time $t_{n-1}$.
 The data are modeled as a realization of a random variable $Y_{\unit,n}$ which measures $C_{\unit}(t_n)-C_{\unit}(t_{n-1})$.
@@ -1408,9 +1412,9 @@ However, if their case reports have likelihood $0$ under a model then they can l
 
 We therefore added a small amount of additional movement between cities based on a gravity model,
 \begin{equation}
-M_{uj} = M^{\mathrm {li20}}_{uj} + \frac{{\mathcal F} \, \bar{d}}{\bar P(t_0)}\times \frac{ P_u(t_0)  \, P_j(t_0)}{d_{uj}},
+M_{uj}(t) = M^{\mathrm {li20}}_{uj}(t) + \frac{{\mathcal F} \, \bar{d}}{\bar P(t_0)}\times \frac{ P_u(t_0)  \, P_j(t_0)}{d_{uj}},
 \end{equation}
-where $M^{\mathrm {li20}}_{uj}$ is the movement from city $u$ to $j$ used by \citet{li20}, $P_u(t_0)$ is the initial population in city $u$; $\bar P(t_0)$ is the average population across all 373 cities; $d_{uj}$ is the distance from city $u$ to city $j$; $\bar d$ is the average of this distance over all $(373\times 372)/2$ pairs; $\mathcal F$ is a mobility correction factor which we took as ${\mathcal F}=20$ based on assessment of diagnostic plots.
+where $M^{\mathrm {li20}}_{uj}(t)$ is the movement rate from city $u$ to $j$ at time $t$ used by \citet{li20}, $P_u(t_0)$ is the initial population in city $u$; $\bar P(t_0)$ is the average population across all 373 cities; $d_{uj}$ is the distance from city $u$ to city $j$; $\bar d$ is the average of this distance over all $(373\times 372)/2$ pairs; $\mathcal F$ is a mobility correction factor which we took as ${\mathcal F}=20$ based on assessment of diagnostic plots.
 Figure~\ref{fig:mobility-graph-plot} shows that this modification does not provide a major distortion to the pattern of travel from the movement data.
 This figure displays only day 1 (January 10), but other days show similar patterns.
 Figure~\ref{fig:mobility_travel_vs_size} gives further evidence for this; the modification is sufficient to move the zero travel records toward the main body of data, but not enough to result in other qualitative changes.
@@ -1742,9 +1746,9 @@ Therefore, it is appropriate to compare filtering methods by their predictive li
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=15cm]{../filter_tests/filter_tests9.png}
+\includegraphics[width=15cm]{../filter_tests/filter_tests10.png}
 \end{center}
-\caption{Comparing filters on simulated data from model \code{li23}. ABF is the adapted bagged filter \citep{ionides21}; ABF-IR is the adapted bagged filter with intermediate resampling \citep{ionides21}; BPF is the block particle filter; EnKF is the ensemble Kalman filter; GIRF is the guided intermediate resampling filter \citep{park20}; PF is the particle filter; UBF is the unadapted bagged filter \citep{ionides21}.}\label{fig:filter_test}
+\caption{Comparing filters on simulated data from model \code{li23}. ABF is the adapted bagged filter \citep{ionides23-jasa}; ABF-IR is the adapted bagged filter with intermediate resampling \citep{ionides23-jasa}; BPF is the block particle filter; EnKF is the ensemble Kalman filter; GIRF is the guided intermediate resampling filter \citep{park20}; PF is the particle filter; UBF is the unadapted bagged filter \citep{ionides23-jasa}.}\label{fig:filter_test}
 \end{figure}
 
 To investigate the suitability of the block particle filter for this data analysis, we compared log-likelihood evaluation from various filters available in the \pkg{spatPomp} package.
@@ -1754,15 +1758,15 @@ Figure~\ref{fig:filter_test} shows that the block particle filter performs well 
 The particle filter is effective for up to $U=5$ cities, but (as theory predicts) its performance starts declining rapidly as dimension increases.
 The particle filter gives an unbiased and consistent Monte Carlo estimate of the likelihood, so we can tell from Figure~\ref{fig:filter_test} that the block approximation is effective for small $U$ since is it does not fall far behind the particle filter in situations where the latter is known to give essentially exact results.
 However, the block particle filter continues to operate successfully for large $U$, when the particle filter fails.
-Two bagged filters (ABF and UBF) also perform well, however their structure is not well suited to parameter estimation via iterated perturbed filtering \citep{ionides21}.
+Two bagged filters (ABF and UBF) also perform well, however their structure is not well suited to parameter estimation via iterated perturbed filtering \citep{ionides23-jasa}.
 The particle filters using guided intermediate resampling (ABF-IR and GIRF) are computationally expensive; in principle, they have good scalability properties, however, their \pkg{spatPomp} implementation performs less well than the unguided filters in this experiment.
 
 The algorithmic settings for Figure~\ref{fig:filter_test} were set for comparable computing times in the \pkg{spatPomp} implementation.
 Full details are available in the published source code.
 Different algorithms have different demands in terms of number of computations, memory requirements, and parallelizability.
 All these algorithms have various tuning parameters, so we do not rule out the possibility that the numerical comparisons are dependent on details of the implementation.
-Figure~\ref{fig:filter_test} is similar to Figure~3 of \citet{ionides21}, that shows an equivalent filter comparison for a longer collection of time series of an endemic viral disease, namely pre-vaccination measles.
-Different relative performance results can be obtained on other model classes, for example in a linear Gaussian model (Figure~1 of \citet{ionides21}) or the Lorenz~96 geophysical model (Figure~S3 of \citet{ionides21}).
+Figure~\ref{fig:filter_test} is similar to Figure~3 of \citet{ionides23-jasa}, that shows an equivalent filter comparison for a longer collection of time series of an endemic viral disease, namely pre-vaccination measles.
+Different relative performance results can be obtained on other model classes, for example in a linear Gaussian model (Figure~1 of \citet{ionides23-jasa}) or the Lorenz~96 geophysical model (Figure~S3 of \citet{ionides23-jasa}).
 Figure~\ref{fig:filter_test} therefore adds to the growing body of evidence that block particle filters are well suited to metapopulation models.
 
 \subsection{\secSep Limitations of IBPF}
@@ -2116,8 +2120,8 @@ The first task of data analysis is to identify such discrepancies, since that is
 \section{\secSep The metapoppkg R package}
 \label{sec:metapoppkg}
 
-Source code reproducing the numerical results in the article and this supplement is available at \url{https://github.com:jifanli/metapop_article}.
-The code builds on a software package, \code{metapoppkg}, available at \url{https://github.com:jifanli/metapoppkg}.
+Source code reproducing the numerical results in the article and this supplement is available at \url{https://github.com/jifanli/metapop_article}.
+The code builds on a software package, \code{metapoppkg}, available at \url{https://github.com/jifanli/metapoppkg}.
 This package provides the dataset and models under consideration, as well as some useful data analysis operations.
 The documentation and unit tests for \code{metapoppkg} help to make the data analysis extendable: they reduce the overhead for subsequent investigators to adapt the analysis we present with variations to the models, data or statistical methods. Extendable data analysis is discussed by \citet{wheeler23}.
 
@@ -2132,6 +2136,7 @@ We also use plotting functions designed specifically for the analysis presented 
 
 \bibliographystyle{apalike}
 \bibliography{../bib-metapop}
+%\input{si.bbl}
 
 \end{document}
 
