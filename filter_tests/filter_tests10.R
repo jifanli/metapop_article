@@ -13,7 +13,7 @@ registerDoParallel(cores)
 li23_model_dir <- "li23Model/"
 if(!dir.exists(li23_model_dir)) dir.create(li23_model_dir)
 
-li23_spatPomp <- stew(file=paste0(li23_model_dir,"li23_spatPomp10.rda"),{
+li23_spatPomp <- stew(file=paste0(li23_model_dir,"li23_spatPomp10v8.rda"),{
   out <- readRDS("l8.rds")
   li23_params <- unlist(out[which.max(out$logLik),-c(1,2)])
   li23_params <- li23_params[names(li23_params)%in%names(coef(li23(U = 2, for_ibpf = F)))] # from for_ibpf=T to for_ibpf=F
@@ -30,7 +30,7 @@ run_level=2
 files_dir <- paste0("run_level_",run_level,"/")
 if(!dir.exists(files_dir)) dir.create(files_dir)
 
-stew(file=paste0(files_dir,"settings10.rda"),{
+stew(file=paste0(files_dir,"settings10v8.rda"),{
   
   # copy variables that should be included in the stew
   run_level <- run_level 
@@ -87,10 +87,10 @@ jobs <- expand.grid(U=U,reps=1:replicates)
 jobs$U_id <- rep(seq_along(U),times=replicates)
 
 
-spatPomp <- stew(file=paste0(files_dir,"spatPomp10.rda"),{
-  load(file=paste0(li23_model_dir,"li23_spatPomp10.rda"))  
+spatPomp <- stew(file=paste0(files_dir,"spatPomp10v8.rda"),{
+  load(file=paste0(li23_model_dir,"li23_spatPomp10v8.rda"))  
   li23_list <- vector("list", length = length(U))  
-  set.seed(324739)
+  set.seed(3247398)
   for(i in 1:length(U)) li23_list[[i]] <- li23_subset(m_U=U[i], m_N=N)
 })
 
@@ -101,7 +101,7 @@ nbhd <- function(object, time, unit) {
   return(nbhd_list)
 }
 
-girf <- stew(file=paste0(files_dir,"girf10.rda"),seed=5981724,{
+girf <- stew(file=paste0(files_dir,"girf10v8.rda"),seed=5981724,{
   foreach(job=iter(jobs,"row")) %dopar% {
     system.time(
       girf(li23_list[[job$U_id]],
@@ -120,7 +120,7 @@ girf <- stew(file=paste0(files_dir,"girf10.rda"),seed=5981724,{
 jobs$girf_logLik <- vapply(girf_list,function(x)x$logLik,numeric(1))
 jobs$girf_time <- vapply(girf_list,function(x) x$time,numeric(1))
 
-abf <- stew(file=paste0(files_dir,"abf10.rda"),seed=844424,{
+abf <- stew(file=paste0(files_dir,"abf10v8.rda"),seed=844424,{
   foreach(job=iter(jobs,"row")) %do% {
     system.time(
       abf(li23_list[[job$U_id]],
@@ -137,7 +137,7 @@ jobs$abf_logLik <- vapply(abf_list,function(x)x$logLik,numeric(1))
 jobs$abf_time <- vapply(abf_list,function(x) x$time,numeric(1))
 
 
-ubf <- stew(file=paste0(files_dir,"ubf10.rda"),seed=844425,{
+ubf <- stew(file=paste0(files_dir,"ubf10v8.rda"),seed=844425,{
   foreach(job=iter(jobs,"row")) %do% {
     system.time(
       abf(li23_list[[job$U_id]], 
@@ -154,7 +154,7 @@ jobs$ubf_logLik <- vapply(ubf_list,function(x)x$logLik,numeric(1))
 jobs$ubf_time <- vapply(ubf_list,function(x) x$time,numeric(1))
 
 
-abfir <- stew(file=paste0(files_dir,"abfir10.rda"),seed=53398,{
+abfir <- stew(file=paste0(files_dir,"abfir10v8.rda"),seed=53398,{
   foreach(job=iter(jobs,"row")) %do% {
     system.time(
       abfir(li23_list[[job$U_id]],
@@ -173,7 +173,7 @@ jobs$abfir_time <- vapply(abfir_list,function(x) x$time,numeric(1))
 
 
   
-pfilter <- stew(file=paste0(files_dir,"pfilter10.rda"),seed=53286,{
+pfilter <- stew(file=paste0(files_dir,"pfilter10v8.rda"),seed=53286,{
   foreach(job=iter(jobs,"row")) %dopar% {
     system.time(
       pfilter(li23_list[[job$U_id]],Np=pfilter_Np) -> pfilter_out
@@ -187,7 +187,7 @@ jobs$pfilter_logLik <- vapply(pfilter_list,function(x)x$logLik,numeric(1))
 jobs$pfilter_time <- vapply(pfilter_list,function(x) x$time,numeric(1))
 
   
-bpf <- stew(file=paste0(files_dir,"bpf10.rda"),seed=53285,{
+bpf <- stew(file=paste0(files_dir,"bpf10v8.rda"),seed=53285,{
   foreach(job=iter(jobs,"row")) %dopar% {
     system.time(
       bpfilter(li23_list[[job$U_id]],
@@ -205,7 +205,7 @@ jobs$bpf_time <- vapply(bpf_list,function(x) x$time,numeric(1))
   
   ###  genkf(list[[1]],Np=enkf_Np) -> enkf_out
 list_enkf <- li23_list
-enkf <- stew(file=paste0(files_dir,"enkf10.rda"),seed=53285,{
+enkf <- stew(file=paste0(files_dir,"enkf10v8.rda"),seed=53285,{
   foreach(job=iter(jobs,"row")) %dopar% {
     list_enkf[[job$U_id]] <- spatPomp(li23_list[[job$U_id]],
                                       vunit_measure=spatPomp_Csnippet(
@@ -253,7 +253,7 @@ results$U <- results$Units+
 results$logLik_per_unit <- results$logLik/results$Units
 results$logLik_per_obs <- results$logLik_per_unit/N
 
-save(file=paste0(files_dir,"results10.rda"),results,jobs)
+save(file=paste0(files_dir,"results10v8.rda"),results,jobs)
 
 max <- max(results$logLik_per_obs)
 
@@ -285,7 +285,7 @@ filter_tests <- ggplot(results,mapping = aes(x = U, y = logLik_per_obs, group=Me
         axis.line = element_line(colour = "black"))+
   ylab("Log-likelihood per unit per time")
 
-ggsave("filter_tests10.png", plot=filter_tests, width=10, height=8, dpi=300)
+ggsave("filter_tests10v8.png", plot=filter_tests, width=10, height=8, dpi=300)
 
   
   

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ##ESSARY JOB SPECIFICATIONS
-#SBATCH --job-name=ft16      
+#SBATCH --job-name=ft10v8      
 #SBATCH --time=15:00:00          
 #SBATCH --nodes=1                  
 #SBATCH --ntasks-per-node=48        
@@ -17,4 +17,4 @@
 module load GCC/11.2.0  OpenMPI/4.1.1
 module load R/4.2.0
 
-Rscript /scratch/user/jifanli/filter_tests10.R
+Rscript /scratch/user/jifanli/filter_tests10v8.R
