@@ -1046,10 +1046,10 @@ Here, we focus on likelihood evaluation via the block particle filter, implement
 The ensemble Kalman filter and iterated ensemble Kalman filter, as employed by \citep{li20}, are implemented as \code{enkf} and \code{ienkf}, respectively,  and are discussed further in Section~\ref{sec:enkf}.
 
 <<table_params>>=
-li1 <- li20(U=5,version='li20period1',for_ibpf=F)
-li_par1 <- par_li(coef(li1),dir="from_li")
-li3 <- li20(U=5,version='li20period3',for_ibpf=F)
-li_par3 <- par_li(coef(li3),dir="from_li")
+li1 <- li23(U=5,version='li20period1',for_ibpf=F)
+li_par1 <- coef(li1)
+li3 <- li23(U=5,version='li20period3',for_ibpf=F)
+li_par3 <- coef(li3)
 
 out3 <- readRDS("../l8/out_3/l8.rds")
 mle3 <- unlist(out3[which.max(out3$logLik),-c(1,2)])
