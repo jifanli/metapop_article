@@ -1700,10 +1700,14 @@ A diagram representing an iterated block particle filter is showh in Figure~\ref
 
 
 The performance of particle filters decays rapidly with the dimension of the latent state \citep{bengtsson08}.
-Iterated particle filters suffer from the same curse of dimensiounality.
+Iterated particle filters suffer from the same curse of dimensionality.
 Block particle filters avoid this curse by partitioning the latent states into weakly dependent units, and resampling separately on each unit.
 This is analogous to recombination in sexual reproduction, with each block corresponding to a chromosome.
-The recombination allows successful blocks of one particle to join up with different successful blocks from another particle.
+In this evolutionary analogy, each particle at time $t_n$ is an individual in the $n$th generation of a population.
+The latent state of the particle is its genetic material, and this state is divided into chromosomes corresponding to each block.
+Reproduction occurs at the resampling stage of the block particle filter, at which point the next generation of particles is resampled from the pool of chomosomes.
+In this resampling process, each chromosome from the previous generation is selected proportionally to its fitness.
+Thus, recombination allows successful blocks of one particle to join up with different successful blocks from another particle.
 If this approximation permits effective high-dimensional filtering then the parameter perturbation strategy can be employed for parameter estimation, just as for basic particle filters.
 
 
