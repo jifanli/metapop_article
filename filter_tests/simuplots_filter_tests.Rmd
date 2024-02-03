@@ -1,0 +1,29 @@
+---
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE, fig.width=8, fig.height=10, fig.show='asis'}
+library(metapoppkg)
+library(ggplot2)
+library(ggnewscale)
+
+U <- c(373, 256, 128, 64, 32, 16, 8, 4, 2)
+
+load(file="run_level_2/spatPomp10.rda")
+plot_list10 <- list()
+obs_counts <- lapply(li23_list, obs)
+limit <- log10(max(unlist(obs_counts))+1)
+for(i in 1:length(U)) plot_list10[[i]] <- plot_li(x=li23_list[[i]],U=U[i],limit=limit) + theme(legend.position = "none") + ggtitle("filter_tests10")
+
+load(file="run_level_2/spatPomp9.rda")
+plot_list9 <- list()
+obs_counts <- lapply(li23_list, obs)
+limit <- log10(max(unlist(obs_counts))+1)
+for(i in 1:length(U)) plot_list9[[i]] <- plot_li(x=li23_list[[i]],U=U[i],limit=limit) + theme(legend.position = "none") + ggtitle("filter_tests9")
+for(i in 1:length(U)) print(plot_list10[[i]]/plot_list9[[i]])
+```

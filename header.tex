@@ -1,0 +1,163 @@
+
+\newcommand\MainResultsTable{1} %% Model comparisons by log-likelihood, evaluated by a block particle filter.
+\newcommand\MainFigModelDiagram{1} %% A flow diagram for the SEAIR metapopulation model.
+\newcommand\MainFigSimulations{2} %% daily case report time series for models M1 and M6
+\newcommand\mainFigIBPF{3} %% A flow diagram for an iterated block particle filter. 
+
+\newcommand\suppSecEnkf{S4}
+\newcommand\suppSecOurModel{S1}
+\newcommand\suppSecMobility{S1.2}
+\newcommand\suppSecLiModel{S1.3}
+\newcommand\suppSecBenchmark{S2}
+\newcommand\suppSecReview{S3} %% Review of inference methods for metapopulation models
+\newcommand\suppSecIBPF{S4}  %% The block particle filter and iterated block particle filter
+\newcommand\suppSecEnKF{S5}  %% review of EnKF
+\newcommand\suppSecUnconstrained{S6} %% profiles for the unconstrained li23 model
+\newcommand\suppSecInference{S7} %% now profile likelihood CIs
+\newcommand\suppSecResiduals{S8} %% now anomaly analysis
+\newcommand\suppSecMetapoppkg{S9}
+
+
+\newcommand\suppFigPercentiles{S2} %% Simulated reports for model M5, showing the 10th, 50th and 90th percentiles. 
+\newcommand\suppTableResults{S1}
+\newcommand\suppFigFilterComparison{S7} %% Comparing filters on simulated data from model li23
+
+\newcommand\myTitle{Inference on spatiotemporal dynamics for networks of biological populations}
+\newcommand\myAuthorList{Jifan Li, Edward L. Ionides, Aaron A. King, Mercedes Pascual and Ning Ning}
+  
+%% for flow diagrams
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\usetikzlibrary {arrows.meta}
+\usetikzlibrary{shapes.geometric}
+
+\newcommand\LiMobility{M$_1$}
+\newcommand\LiParams{M$_2$}
+\newcommand\BenchmarkIID{M$_3$}
+\newcommand\BenchmarkAR{M$_4$}
+\newcommand\RevisedModelUnconstrained{M$_5$}
+\newcommand\RevisedModelConstrained{M$_6$}
+
+%% for algorithm pseudocode
+\usepackage{enumerate,alltt,xstring}
+\usepackage[ruled,noline,linesnumbered]{algorithm2e}
+\SetKwFor{For}{for}{do}{end}
+\SetKwFor{While}{while}{do}{end}
+\SetKwInput{KwIn}{input}
+\SetKwInput{KwOut}{output}
+\SetKwInput{KwCplx}{complexity}
+\SetKwInput{KwIndices}{note}
+\SetKwBlock{Begin}{procedure}{}
+\DontPrintSemicolon
+\newcommand\argequals{{\,=\,}}
+\newcommand\data[1]{#1^*}
+\newcommand\giventh{{\hspace{0.5mm};\hspace{0.5mm}}}
+\newcommand\seq[2]{{#1}\!:\!{#2}}
+\newcommand\mydot{{\,\cdot\,}}
+\newcommand\given{{\,\vert\,}}
+\newcommand\normal{{\mathrm{Normal}}}
+\newcommand\vmeasure{V}
+\newcommand\emeasure{e}
+
+\newcommand\Time{N}
+\newcommand\ttime{n}
+\newcommand\Np{J}
+\newcommand\np{j}
+\newcommand\altNp{q}
+
+\newcommand\prob{\mathrm{Prob}}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage[version=4]{mhchem}
+\usepackage{stmaryrd}
+\usepackage{mathtools}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{subfigure}
+\usepackage{xurl}
+\usepackage{makecell}
+\usepackage{multirow}
+\usepackage{multicol}
+\usepackage[ruled,noline,linesnumbered]{algorithm2e}
+\usepackage[normalem]{ulem}% to use \sout in feedback commands
+\usepackage{bm}
+\usepackage[mathscr]{euscript}
+\usepackage{amsthm}
+\usepackage{bbm} % for \mathbbm{1}
+
+\newcommand\lik{L}
+\newcommand\loglik{\ell}
+\newcommand\myvec[1]{{\mathbf{#1}}}
+\newcommand\proglang[1]{\textsf{#1}} 
+\newcommand\code[1]{\texttt{#1}}
+\newcommand\pkg[1]{\code{#1}}
+\newcommand\class[1]{\code{#1}}
+\newcommand\unit{u}
+\newcommand\altUnit{\tilde{u}}
+\newcommand\Unit{U}     
+\newcommand\rate{\mu}
+\usepackage{upgreek}
+%\newcommand\relativeTransmission{\phi}
+\newcommand\relativeTransmission{\upmu}
+\newcommand\diagnosisDelay{T_d}
+\newcommand\latency{Z}
+\newcommand\infectiousPeriod{D}
+\newcommand\reportRate{\alpha}
+\newcommand\Rzero{\mathcal{R}_0}
+\newcommand\mobilityFactor{\vartheta}
+\newcommand\eqsep{\hspace{1mm}}
+\newcommand\pop{P}
+\newcommand\EzeroDescription{Initial $E$ in Wuhan}
+\newcommand\AzeroDescription{Initial $A$ in Wuhan}
+\newcommand\alphaDescription{Reported fraction}
+\newcommand\before{\mathrm{be}}
+\newcommand\after{\mathrm{af}}
+
+\newcommand\E{\mathbb{E}}
+\newcommand\Var{\mathrm{Var}}
+\newcommand\var{\Var}
+
+\usepackage{times}
+\usepackage{url}
+\usepackage{enumitem}
+\usepackage[hidelinks,colorlinks=true,linkcolor=blue,citecolor=blue]{hyperref}
+
+%% for figures illustrating POMPs and the problem space for spatPomp
+\usepackage{tikz,pgfplots}
+\pgfplotsset{compat=1.16}
+\usepgfplotslibrary{fillbetween}
+\usetikzlibrary{patterns}
+\usetikzlibrary{arrows,chains,matrix,positioning,scopes,fit,decorations.pathreplacing}
+\tikzset{join/.code=\tikzset{after node path={%
+\ifx\tikzchainprevious\pgfutil@empty\else(\tikzchainprevious)%
+edge[every join]#1(\tikzchaincurrent)\fi}}}
+%
+% \tikzset{>=stealth,every on chain/.append style={join},
+%         every join/.style={->}}
+\tikzstyle{labeled}=[execute at begin node=$\scriptstyle,
+   execute at end node=$]
+\newcommand{\FixedLengthArrow}{1,0}
+
+
+%% for comments
+\usepackage{color}
+%orange for EI
+\definecolor{orange}{rgb}{1,0.5,0}
+\newcommand\ei[2]{\sout{#1} \textcolor{orange}{#2}}
+\newcommand\eic[1]{\textcolor{orange}{[#1]}}
+%green for PN
+\definecolor{green}{rgb}{0,0.5,0}
+\newcommand\pn[2]{\sout{#1} \textcolor{green}{#2}}
+\newcommand\pnc[1]{\textcolor{red}{[#1]}}
+%purple for JF
+\definecolor{purple}{rgb}{0.5,0,1}
+\newcommand\jf[2]{\sout{#1} \textcolor{purple}{#2}}
+\newcommand\jfc[1]{\textcolor{purple}{[#1]}}
+%teal for TODO
+\definecolor{teal}{rgb}{0,0.5,0.8}
+\newcommand\todo[1]{\textcolor{teal}{[TO DO? #1]}}
+

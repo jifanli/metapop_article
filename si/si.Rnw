@@ -1,6 +1,11 @@
 \documentclass[10pt]{article}
 \pdfoutput=1 
 
+
+\input{../header}
+\usepackage{natbib}
+\usepackage{fullpage}
+
 <<knitr-opts, include=FALSE, purl=FALSE>>=
 library(knitr)
 opts_knit$set(concordance=TRUE)
@@ -32,56 +37,6 @@ opts_chunk$set(
     pointsize=9
   )
 )
-
-R0_M6 <- function (params, be = T) 
-{
-    a = params[ifelse(be, "alpha_be1", "alpha_af1")]
-    b = params[ifelse(be, "Beta_be1", "Beta_af1")]
-    D = params["D1"]
-    mu = params[ifelse(be, "mu_be1", "mu_af1")]
-    unname((a + (1 - a) * mu) * b * D)
-}
-
-plot_si <- function(x, U=373, limit=4, order="population") {
-  df <- as.data.frame(x)
-  df[x@unit_obsnames] <- log10(df[x@unit_obsnames]+1)
-  # change the order, sort by population
-  if (order=="population"){
-    popu <- df$pop[1:U]
-    index <- order(order(popu, decreasing = T))
-  } else if (order=="cases"){
-    index <- 1:U
-  }
-  wuhan_index <- which(df$city=="Wuhan")
-  df$Wuhan <- NA
-  df$Wuhan[wuhan_index] <- df$cases[wuhan_index]
-#  shenyang_index <- which(df$city=="Shenyang")
-#  df$Shenyang <- NA
-#  df$Shenyang[shenyang_index] <- df$cases[shenyang_index]
-  df$y_ticks <- rep(index,30)
-
-  ggplot2::ggplot(data = df,
-    mapping = ggplot2::aes(x = !!rlang::sym(x@timename), y = .data$y_ticks)) +
-    ggplot2::scale_x_continuous(expand=c(0,0)) +
-    ggplot2::scale_y_continuous(expand=c(0,0), sec.axis = sec_axis(~ .)) +
-    ggplot2::geom_tile(mapping = ggplot2::aes(fill = !!rlang::sym(x@unit_obsnames))) +
-    ggplot2::scale_fill_gradient(low = "#FFFFFF", high = "#000000",limits=c(0,limit)) +
-    ggplot2::labs(x = "time",
-                  y = "unit",
-                  fill = paste("log10\n(",x@unit_obsnames,"+1)",sep="")) +
-    ggnewscale::new_scale("fill") +
-    ggplot2::geom_tile(mapping = ggplot2::aes(fill = .data$Wuhan), data = ~subset(., !is.na(Wuhan))) +
-    ggplot2::scale_fill_gradient(low = "#FFFFFF", high = "#FF0000",limits=c(0,limit)) + 
-    ggplot2::labs(fill = "log10\n(Wuhan+1)") +
-    ggnewscale::new_scale("fill") +
-    ggplot2::theme(
-      axis.text.y=ggplot2::element_blank(),
-      axis.ticks.y=ggplot2::element_blank(),
-      panel.border=ggplot2::element_blank(),
-      axis.line.y = ggplot2::element_line(linewidth = 0.5, linetype = "solid"))
-  
-}
-
 
 sim_percentile_si <- function(U = 373, Nsim=100, order="population", model = "li23", seed = 12315, registerDoRNG = 3123465, params) {
   cores <-  as.numeric(Sys.getenv('SLURM_NTASKS_PER_NODE', unset = NA))
@@ -241,121 +196,6 @@ plot_percentile_si <- function(df_list){
 \renewcommand{\textfraction}{.15}
 \renewcommand{\floatpagefraction}{.66}
 
-%% for flow diagrams
-\usepackage{tikz}
-\usetikzlibrary{positioning}
-\usetikzlibrary {arrows.meta}
-\usetikzlibrary{shapes.geometric}
-
-\newcommand\LiMobility{M$_1$}
-\newcommand\LiParams{M$_2$}
-\newcommand\BenchmarkIID{M$_3$}
-\newcommand\BenchmarkAR{M$_4$}
-\newcommand\RevisedModelUnconstrained{M$_5$}
-\newcommand\RevisedModelConstrained{M$_6$}
-\newcommand\MainResultsTable{1}
-
-%% for algorithm pseudocode
-\usepackage{enumerate,alltt,xstring}
-\usepackage[ruled,noline,linesnumbered]{algorithm2e}
-\SetKwFor{For}{for}{do}{end}
-\SetKwFor{While}{while}{do}{end}
-\SetKwInput{KwIn}{input}
-\SetKwInput{KwOut}{output}
-\SetKwInput{KwCplx}{complexity}
-\SetKwInput{KwIndices}{note}
-\SetKwBlock{Begin}{procedure}{}
-\DontPrintSemicolon
-\newcommand\argequals{{\,=\,}}
-\newcommand\data[1]{#1^*}
-\newcommand\giventh{{\hspace{0.5mm};\hspace{0.5mm}}}
-\newcommand\seq[2]{{#1}\!:\!{#2}}
-\newcommand\mydot{{\,\cdot\,}}
-\newcommand\given{{\,\vert\,}}
-\newcommand\normal{{\mathrm{Normal}}}
-\newcommand\vmeasure{V}
-\newcommand\emeasure{e}
-
-\newcommand\Time{N}
-\newcommand\ttime{n}
-\newcommand\Np{J}
-\newcommand\np{j}
-\newcommand\altNp{q}
-
-\newcommand\prob{\mathrm{Prob}}
-
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath}
-\usepackage{amsfonts}
-\usepackage{amssymb}
-\usepackage[version=4]{mhchem}
-\usepackage{stmaryrd}
-\usepackage{mathtools}
-\usepackage{graphicx}
-\usepackage{float}
-\usepackage{subfigure}
-\usepackage{hyperref}
-\usepackage{fullpage}
-\usepackage{xurl}
-\usepackage{makecell}
-\usepackage{multirow}
-\usepackage{multicol}
-\usepackage[ruled,noline,linesnumbered]{algorithm2e}
-\usepackage[normalem]{ulem}% to use \sout in feedback commands
-\usepackage{bm}
-\usepackage[mathscr]{euscript}
-\usepackage{amsthm}
-\usepackage{natbib}
-\usepackage{bbm} % for \mathbbm{1}
-
-\newcommand\lik{L}
-\newcommand\loglik{\ell}
-\newcommand\myvec[1]{{\mathbf{#1}}}
-\newcommand\proglang[1]{\textsf{#1}} 
-\newcommand\code[1]{\texttt{#1}}
-\newcommand\pkg[1]{\code{#1}}
-\newcommand\class[1]{\code{#1}}
-\newcommand\unit{u}
-\newcommand\altUnit{\tilde{u}}
-\newcommand\Unit{U}     
-\newcommand\rate{\mu}
-\usepackage{upgreek}
-%\newcommand\relativeTransmission{\phi}
-\newcommand\relativeTransmission{\upmu}
-\newcommand\diagnosisDelay{T_d}
-\newcommand\latency{Z}
-\newcommand\infectiousPeriod{D}
-\newcommand\reportRate{\alpha}
-\newcommand\Rzero{\mathcal{R}_0}
-\newcommand\mobilityFactor{\vartheta}
-\newcommand\eqsep{\hspace{1mm}}
-\newcommand\pop{P}
-\newcommand\EzeroDescription{Initial $E$ in Wuhan}
-\newcommand\AzeroDescription{Initial $A$ in Wuhan}
-\newcommand\alphaDescription{Reported fraction}
-\newcommand\before{\mathrm{be}}
-\newcommand\after{\mathrm{af}}
-
-\newcommand\E{\mathbb{E}}
-\newcommand\Var{\mathrm{Var}}
-\newcommand\var{\Var}
-
-% for figures illustrating POMPs and the problem space for spatPomp
-\usepackage{tikz,pgfplots}
-\pgfplotsset{compat=1.16}
-\usepgfplotslibrary{fillbetween}
-\usetikzlibrary{patterns}
-\usetikzlibrary{arrows,chains,matrix,positioning,scopes,fit,decorations.pathreplacing}
-\tikzset{join/.code=\tikzset{after node path={%
-\ifx\tikzchainprevious\pgfutil@empty\else(\tikzchainprevious)%
-edge[every join]#1(\tikzchaincurrent)\fi}}}
-%
-% \tikzset{>=stealth,every on chain/.append style={join},
-%         every join/.style={->}}
-\tikzstyle{labeled}=[execute at begin node=$\scriptstyle,
-   execute at end node=$]
-\newcommand{\FixedLengthArrow}{1,0}
 
 
 \hypersetup{colorlinks=true, linkcolor=blue, filecolor=magenta, urlcolor=cyan,}
@@ -363,22 +203,6 @@ edge[every join]#1(\tikzchaincurrent)\fi}}}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{1em}
 
-\usepackage{color}
-%orange for EI
-\definecolor{orange}{rgb}{1,0.5,0}
-\newcommand\ei[2]{\sout{#1} \textcolor{orange}{#2}}
-\newcommand\eic[1]{\textcolor{orange}{[#1]}}
-%green for PN
-\definecolor{green}{rgb}{0,0.5,0}
-\newcommand\pn[2]{\sout{#1} \textcolor{green}{#2}}
-\newcommand\pnc[1]{\textcolor{red}{[#1]}}
-%purple for JF
-\definecolor{purple}{rgb}{0.5,0,1}
-\newcommand\jf[2]{\sout{#1} \textcolor{purple}{#2}}
-\newcommand\jfc[1]{\textcolor{purple}{[#1]}}
-%teal for TODO
-\definecolor{teal}{rgb}{0,0.5,0.8}
-\newcommand\todo[1]{\textcolor{teal}{[TO DO? #1]}}
 
 \graphicspath{{plots/}}
 
@@ -396,11 +220,10 @@ edge[every join]#1(\tikzchaincurrent)\fi}}}
 \newcommand\secSep{\hspace{2mm}}
 
 \begin{document}
-%\SweaveOpts{concordance=TRUE}
 
 \date{\small Compiled \today,  using \proglang{R} \Sexpr{paste0(R.version$major,".",R.version$minor)}, \pkg{metapoppkg} \Sexpr{packageVersion('metapoppkg')}, \pkg{spatPomp} \Sexpr{packageVersion('spatPomp')}, and \pkg{pomp} \Sexpr{packageVersion('pomp')}.}
-\title{Supplement to ``Machine Learning for Mechanistic Models of Metapopulation Dynamics''}
-\author{Jifan Li, Edward L. Ionides, Aaron A. King, Mercedes Pascual and Ning Ning}
+\title{Supplement to ``{\myTitle}''}
+\author{\myAuthorList}
 \maketitle
 
 %\vspace{3mm}
@@ -426,6 +249,11 @@ theme_set(theme_bw())
 if (!dir.exists("../model1/si")) {
   dir.create("../model1/si", recursive = TRUE)
 }
+
+i <- 3
+plotdir <- paste0("plot_",i,"/")
+if (!dir.exists(plotdir)) dir.create(plotdir)
+
 @
 
 <<set-opts, include=FALSE>>=
@@ -454,50 +282,14 @@ library(patchwork)
 
 R0_uc_be <- readRDS("../profile9/R0/profile_R0_be_full.rds")[,c("logLik","R0_be1")]
 R0_uc_be <- R0_uc_be[R0_uc_be$R0_be1<22.5,]
-# rbind(
-#   readRDS("../profile9/R0/out_3/profile_R0_be.rds")[,c("logLik","R0_be1")],
-#   readRDS("../profile9/R0/out_3/profile_R0_be2.rds")[,c("logLik","R0_be1")]
-# )
-  
 R0_uc_af <- readRDS("../profile9/R0/profile_R0_af_full.rds")[,c("logLik","R0_af1")]
-# R0_uc_af <- rbind(
-#   readRDS("../profile9/R0/out_3/profile_R0_af.rds")[,c("logLik","R0_af1")],
- #   readRDS("../profile9/R0/out_3/profile_R0_af2.rds")[,c("logLik","R0_af1")]
- # )
-
 Z_uc_be <-  readRDS("../profile9/Z/profile_Z_be_full.rds")[,c("logLik","Z_be1")]
-# rbind(
-#   readRDS("../profile9/Z/out_3/profile_Z_be3.rds")[,c("logLik","Z_be1")]
-# )
-
 Z_uc_af <-   readRDS("../profile9/Z/profile_Z_af_full.rds")[,c("logLik","Z_af1")]
-# rbind(
-#   readRDS("../profile9/Z/profile_Z_af_full.rds")[,c("logLik","Z_af1")]
-# )
-
 D_uc_be <-  readRDS("../profile9/D/profile_D_be_full.rds")[,c("logLik","D_be1")]
-# rbind(
-#   readRDS("../profile9/D/profile_D_be_full.rds")[,c("logLik","D_be1")]
-# )
-
 D_uc_af <-   readRDS("../profile9/D/profile_D_af_full.rds")[,c("logLik","D_af1")]
 D_uc_af <- D_uc_af[D_uc_af$D_af1>1.1,]
-# rbind(
-#   readRDS("../profile9/D/profile_D_af_full.rds")[,c("logLik","D_af1")]
-# )
-
 alpha_uc_be <- readRDS("../profile9/alpha/profile_alpha_be_full.rds")[,c("logLik","alpha_be1")]
-# rbind(
-#   readRDS("../profile9/alpha/out_3/profile_alpha_be2.rds")[,c("logLik","alpha_be1")],
-#   readRDS("../profile9/alpha/out_3/profile_alpha_be3.rds")[,c("logLik","alpha_be1")]
-# )
-# alpha_uc_be <- alpha_uc_be[alpha_uc_be$alpha_be1>0.02 & alpha_uc_be$alpha_be1<0.2 ,]
-
 alpha_uc_af <-   readRDS("../profile9/alpha/profile_alpha_af_full.rds")[,c("logLik","alpha_af1")]
-# rbind(
-#   readRDS("../profile9/alpha/out_3/profile_alpha_af2.rds")[,c("logLik","alpha_af1")]
-# )
-# alpha_uc_af <- alpha_uc_af[alpha_uc_af$alpha_af1>0.2 ,]
 
 mu_uc_be <- rbind(
   readRDS("../profile9/mu/profile_mu_be_full.rds")[,c("logLik","mu_be1")]
@@ -723,7 +515,6 @@ R0_c_be <- rbind(
   readRDS("../profile7/R0/out_3/profile_R0_be.rds")[,c("logLik","R0_be1")],
   readRDS("../profile7/R0/out_3/profile_R0_be2.rds")[,c("logLik","R0_be1")]
 )
-# R0_c_be <- R0_c_be[R0_c_be$R0_be1>2 & R0_c_be$R0_be1<6  ,]
 
 R0_c_af <- rbind(
   readRDS("../profile7/R0/out_3/profile_R0_af.rds")[,c("logLik","R0_af1")],
@@ -741,7 +532,6 @@ D_c <- rbind(
   readRDS("../profile7/D/out_3/profile_D2.rds")[,c("logLik","D1")] 
 )
 # D_c <- D_c[D_c$D1>2.5 & D_c$D1<8  ,]
-#myplot_c(D_c)
 
 alpha_c_be <- rbind(
   readRDS("../profile7/alpha/out_3/profile_alpha_be.rds")[,c("logLik","alpha_be1")],
@@ -779,7 +569,6 @@ Beta_c_af <- rbind(
   readRDS("../profile7/Beta/out_3/profile_Beta_af2.rds")[,c("logLik","Beta_af1")]
 )
 # Beta_c_af <- Beta_c_af[Beta_c_af$Beta_af1>0.1 ,]
-#myplot_c(Beta_c_af)
 
 A_0_c <- rbind(
   readRDS("../profile7/A_0/out_3/profile_A_0.rds")[,c("logLik","A_01")],
@@ -870,7 +659,6 @@ saveRDS(ci_c,file="../ci_c.rds")
 
 
 
-
 \section{\secSep Specification of the models}
 \label{sec:li23}
 
@@ -929,7 +717,7 @@ Noisy and/or incomplete observations of the latent process at this time are mode
 } \label{fig:spatpomp}
 \end{figure}
 
-We give the mathematical description of the COVID-19 models described in Figure~1 and Table~1 of the main text.
+We give the mathematical description of the COVID-19 models described in Figure~{\MainFigModelDiagram} and Table~{\MainResultsTable} of the main text.
 These metapopulation models are partially observed Markov process (POMP) models with additional spatial structure, known as SpatPOMP models \citep{asfaw23arxiv}.
 The diagram in Figure~\ref{fig:spatpomp} defines a general SpatPOMP corresponding to a metapopulation with $U$ spatial units.
 The latent dynamic state is $\myvec{X}(t)=\big(X_1(t),\dots,X_U(t)\big)$, which we also write as $\myvec{X}(t)=X_{1:U}(t)$.
@@ -980,8 +768,8 @@ For transitions which enter a compartment from $T$, we specify a total rate.
 The non-zero transition rates are therefore as follows:
 \begin{eqnarray}
 \label{eq:muSE}
-\rate_{S_{\unit}E_{\unit}} &=& \beta S_{\unit}(t) \left(\frac{I_{\unit}(t)+ \relativeTransmission A_{\unit}(t)}{\pop_{\unit}(t)}\right)
-d\Gamma_{\unit}/dt,
+\rate_{S_{\unit}E_{\unit}} &=& \beta \left(\frac{I_{\unit}(t)+ \relativeTransmission A_{\unit}(t)}{\pop_{\unit}(t)}\right)
+d\Gamma_{\unit}\big/dt,
 \\
 \rate_{S_{\unit}T} \eqsep = \eqsep \rate_{E_{\unit}T} \eqsep = \eqsep \rate_{A_{\unit}T} &=& \mobilityFactor \sum_j \frac{M_{\unit j}(t)}{\pop_{\unit}-I_{\unit}},
 \\
@@ -991,11 +779,13 @@ d\Gamma_{\unit}/dt,
 \\
 \rate_{TA_{\unit}} &=&\mobilityFactor \sum_j \frac{M_{j \unit}(t)\,  A_{j}}{\pop_{j}-I_{j}},
 \\
-\rate_{E_{\unit}A_{\unit}} \eqsep = \eqsep \rate_{E_{\unit}I_{\unit}}  &=&  \alpha/Z,
+ \eqsep \rate_{E_{\unit}I_{\unit}}  &=&  \alpha/Z,
+ \\
+ \rate_{E_{\unit}A_{\unit}} \eqsep &=& (1-\alpha)\big/ Z
 \\
 \rate_{A_{\unit}R_{\unit}} \eqsep = \eqsep \rate_{I_{\unit}R_{\unit}}  &=& 1/D,
 \\
-\rate_{C^a_{\unit}C^b_{\unit}} \eqsep = \eqsep \rate_{C^b_{\unit}C_{\unit}}  &=& 2\diagnosisDelay.
+\rate_{C^a_{\unit}C^b_{\unit}} \eqsep = \eqsep \rate_{C^b_{\unit}C_{\unit}}  &=& 2\big/\diagnosisDelay.
 \label{eq:muCbC}
 \end{eqnarray}
 We define $d\Gamma_{\unit}/dt$ in (\ref{eq:muSE}) as non-negative multiplicative gamma white noise with variance parameter $\sigma_{SE,\unit}$.
@@ -1031,7 +821,8 @@ Our models {\LiMobility}, {\LiParams}, {\RevisedModelUnconstrained} and {\Revise
 The original model of \citet{li20}, which we call \code{li20}, represents the dynamic model by a system of ordinary differential equations with random rates, as discussed further in Section~\ref{sec:li20}.
 The general model including {\LiMobility}, {\LiParams}, {\RevisedModelUnconstrained} and {\RevisedModelConstrained}, which we call \code{li23}, represents the models as continuous-time Markov chains.
 In addition to this change,  \code{li23} considers two model aspects not investigated by \citet{li20}: (i) overdispersed process noise; (ii) an adjusted movement matrix to ensure that all cities are connected.
-In  {\LiMobility}, these two features are turned off, and so this model is very similar to \code{li20}, as documented subsequently in Section \ref{sec:li20} (and specifically Figure~\ref{fig:li20_plot}) where we discuss \code{li20} in more detail. {\LiMobility} and {\LiParams} have the constraint that $\sigma_{SE}=0$.
+In  {\LiMobility}, these two features are turned off, and so this model is very similar to \code{li20}, as documented in Section \ref{sec:li20}, below, which discusses \code{li20} in more detail.
+{\LiMobility} and {\LiParams} have the constraint that $\sigma_{SE}=0$.
 {\LiMobility} has an additional constraint that $\tau=0$ since this parameter was not included in the dynamic model of \cite{li20}.
 Another difference between these models is that {\LiMobility} uses the mobility data from \citep{li20} whereas {\LiParams} (together with {\RevisedModelUnconstrained} and {\RevisedModelConstrained}) use the modification described in Section~\ref{sec:mobility}.
 {\RevisedModelUnconstrained} involves estimation of all the parameters estimated by \cite{li20}, with the addition of $\sigma_{SE}$ and $\tau$.
@@ -1167,7 +958,7 @@ $\Rzero^{\before}$ &
   \Sexpr{myround(R0(li_par1,be=T),2)} &(2.03,2.77)&
   \Sexpr{myround(if(PROF_MAX) attr(R0_be_plot_uc,"mle") else R0(mle3,be=T),2)} &
     (\Sexpr{myround(attr(R0_be_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(R0_be_plot_uc,"ci")[2],2)})&  
-  \Sexpr{myround(if(PROF_MAX) attr(R0_be_plot_c,"mle") else R0_M6(mle6,be=T),2)} &
+  \Sexpr{myround(if(PROF_MAX) attr(R0_be_plot_c,"mle") else R0v3(mle6,be=T),2)} &
     (\Sexpr{myround(attr(R0_be_plot_c,"ci")[1],2)},\Sexpr{myround(attr(R0_be_plot_c,"ci")[2],2)})&
   Basic reproductive number 
   \\
@@ -1222,7 +1013,7 @@ $\Rzero^{\after}$ &
   \Sexpr{myround(R0(li_par3,be=F),2)} &(0.83,1.16)&
   \Sexpr{myround(if(PROF_MAX) attr(R0_af_plot_uc,"mle") else R0(mle3,be=F),2)} &
     (\Sexpr{myround(attr(R0_af_plot_uc,"ci")[1],2)},\Sexpr{myround(attr(R0_af_plot_uc,"ci")[2],2)})&     
-  \Sexpr{myround(if(PROF_MAX) attr(R0_af_plot_c,"mle") else R0_M6(mle6,be=F),2)} &
+  \Sexpr{myround(if(PROF_MAX) attr(R0_af_plot_c,"mle") else R0v3(mle6,be=F),2)} &
     (\Sexpr{myround(attr(R0_af_plot_c,"ci")[1],2)},\Sexpr{myround(attr(R0_af_plot_c,"ci")[2],2)})&   
   Basic reproductive number 
   \\
@@ -1249,57 +1040,9 @@ We calculated $\Rzero^{\before}=\big(\alpha^{\before}+(1-\alpha^{\before})\mu^{\
 
 
 
-<<panel_plot, message=FALSE, echo=FALSE,fig.width=8.5,fig.height=10,out.width="6.5in",fig.cap="Daily case report time series for 373 cities: (A) the real data; (B) a simulation from model {\\LiMobility}; (C) a simulation from model~{\\RevisedModelConstrained}. Within each panel, cities are ordered by population, largest on the bottom row.">>=
-i <- 3
-library(metapoppkg)
-plotdir <- paste0("plot_",i,"/")
-if (!dir.exists(plotdir)) dir.create(plotdir)
-stew(file=paste0(plotdir,"panel.rda"),{
-  U <-switch(i, 5,50,373)
-  M5 <- li23(U=U)
-  M5_sim <- simulate(M5,params=mle3,seed=100)
-  M1 <- spatPomp(li23(U=U,version="li20period3",for_ibpf=F, mob_modify_factor=0),
-    rmeasure=spatPomp_Csnippet(
-      unit_statenames='C',
-      code="
-        double* cases=&cases1;
-        int u;
-        for (u = 0; u < U; u++) {
-          if (C[u] > 0.0) {
-            cases[u] = nearbyint(C[u]);
-          } else {
-            cases[u] = 0.0;
-          }
-        } 
-      "
-    )
-  )
-  coef(M1)["sigma_SE1"] <- 0
-  M1_sim <- simulate(M1,seed=100)
-})
-panel_plot <- bake(file=paste0(plotdir,"panel2.rds"),{
-  limit <- log10(max(c(obs(M5),obs(M5_sim),obs(M1_sim)))+1)
-  M5_plot <- plot_si(M5_sim, U=U, limit=limit) + ggtitle(expression("(C) "~Model~M[5])) +
-    ylab("City") +
-    xlab("Day") +
-    theme(legend.position = "bottom")
-  M1_plot <- plot_si(M1_sim, U=U, limit=limit) + ggtitle(expression("(B) "~Model~M[1])) +
-    ylab("City") +
-    theme(legend.position = "none", axis.title.x=element_blank(),
-      axis.ticks.x=element_blank(), axis.text.x=element_blank())
-  data_plot <- plot_si(M5, U=U, limit=limit) + ggtitle(expression("(A) "~Data)) + 
-    ylab("City") +
-    theme(legend.position = "none", axis.title.x=element_blank(),
-      axis.ticks.x=element_blank(), axis.text.x=element_blank())
-  data_plot/M1_plot/M5_plot
-})  
-panel_plot
-@
-
 
 
 <<percentile_plot, message=FALSE, echo=FALSE,fig.width=8.5,fig.height=10,out.width="6.5in",fig.cap="Simulated daily case reports for model {\\RevisedModelUnconstrained}, showing the 10th, 50th and 90th percentiles. Within each panel, cities are ordered by population, largest on the bottom row.">>=
-i <- 3
 stew(file=paste0(plotdir,"percentile_df.rda"),{
   percentile_df <- sim_percentile_si(U=switch(i,5,50,373),Nsim = switch(i,10,100,100), params=mle3)
 })  
@@ -1319,14 +1062,10 @@ However, weak identifiability is not surprising in a complex model with many par
 Some model misspecification is also inevitable for a mathematical model of a biological system.
 When weak identifiability and model misspecification co-occur, one possible result is scientifically implausible parameter estimates.
 
-
-Our estimate of the relative transmissibility of unreportable to reportable cases is considerably higher than \cite{li20}.
-Indeed, our estimate during the first time period is $\relativeTransmission^{\before}=\Sexpr{myround(mle3["mu_be1"],2)}$.
-The data are compared to simulations from models {\LiMobility} and {\RevisedModelUnconstrained} in Figure~\ref{fig:panel_plot}. 
-The greater number of cases for model {\RevisedModelUnconstrained} compared to  {\LiMobility} is explained by its higher initial $\Rzero$.
-The variability in {\RevisedModelUnconstrained} is explicitly included in the model and fitted to the data; it therefore matches the variability in the data more closely than  {\LiMobility}.
+The data are compared to simulations from models {\LiMobility} and {\RevisedModelConstrained} in Figure~{\MainFigSimulations} of the main text.
+The variability in {\RevisedModelUnconstrained} and {\RevisedModelConstrained} is explicitly included in the model and fitted to the data; it therefore matches the variability in the data more closely than  {\LiMobility}.
 If many simulations are made from {\RevisedModelUnconstrained}, the pointwise 10$^{\mathrm{th}}$ percentile is similar to a simulation from {\LiMobility} (Figure~\ref{fig:percentile_plot}).
-The similarity between model {\LiMobility} and \code{li20} is evident by comparing Figure~\ref{fig:panel_plot}(B) with Figure~\ref{fig:li20_plot} in Section~\ref{sec:li20}.
+The similarity between model {\LiMobility} and \code{li20} is evident by comparing Figure~{\MainFigSimulations}(B) with Figure~\ref{fig:li20_plot} in Section~\ref{sec:li20}.
 The code and parameters for the simulation from \code{li20} are taken directly from \citet{li20}.
 
 
@@ -1461,7 +1200,7 @@ unadjusted/adjusted
 @
 
 
-\clearpage
+%\clearpage
 
 \subsection{\secSep Comparison with the model and data of \citet{li20}}
 \label{sec:li20}
@@ -1470,7 +1209,6 @@ unadjusted/adjusted
 <<li20_plot, message=FALSE, echo=FALSE,fig.width=8.5,fig.height=10,out.width="6.5in",fig.cap="Simulations for 373 cities, comparing (A) a simulation from the model code and parameters provided by \\citet{li20}; (B) a simulation from model {\\LiMobility}; (C) a simulation from model~{\\LiParams}. Within each panel, cities are ordered by population, largest on the bottom row.">>=
 
 stew(file=paste0(plotdir,"li20_plot.rda"),{
-  i <- 3
   U <-switch(i, 5,50,373)
   M1 <- spatPomp(li23(U=U,version="li20period3",for_ibpf=F, mob_modify_factor=0),
                rmeasure=spatPomp_Csnippet(
@@ -1541,11 +1279,11 @@ stew(file=paste0(plotdir,"li20_plot.rda"),{
     ylab("City") +
    theme(legend.position = "none", axis.title.x=element_blank(),
         axis.ticks.x=element_blank(), axis.text.x=element_blank())
-  M2_plot <- plot_si(M2_sim, U=U, limit=limit) + ggtitle("M2") +
+  M2_plot <- plot_li(M2_sim, U=U, limit=limit) + ggtitle("M2") +
     ylab("City") +
     xlab("Day") +
     theme(legend.position = "bottom")
-  M1_plot <- plot_si(M1_sim, U=U, limit=limit) + ggtitle("M1") +
+  M1_plot <- plot_li(M1_sim, U=U, limit=limit) + ggtitle("M1") +
     ylab("City") +
     theme(legend.position = "none", axis.title.x=element_blank(),
         axis.ticks.x=element_blank(), axis.text.x=element_blank())
@@ -1576,9 +1314,8 @@ This permits reproduction of the methodology used by \citet{li20}  via the \pkg{
 Our implementation of \code{li20} incorporates code adapted from supplementary information provided by \citet{li20}.
 Simulation from \code{li20} using the parameters of \citet{li20} is therefore essentially equivalent to the simulation used by \citet{li20}.
 In Figure~\ref{fig:li20_plot}, we compare a simulation from the code of \citet{li20} with simulations from models~{\LiMobility} and~{\LiParams}.
-We see that \code{li20} and {\LiMobility} look similar; comparing with Figure~\ref{fig:panel_plot} we see that both have distincly less variability than the data.
-The additional variability in {\LiParams} makes it look superficially more like the data, but the additional stochasticity is all ascribed to reporting variability in {\LiParams}; dynamic noise allows a better fit to the data, as documented formally in Table~{\MainResultsTable} and apparent from Figure~\ref{fig:panel_plot}.
-
+We see that \code{li20} and {\LiMobility} look similar; comparing with Figure~{\MainFigSimulations} in the main text, we see that both these mdoels have distincly less variability than the data.
+The additional variability in {\LiParams} makes it look superficially more like the data, but the additional stochasticity is all ascribed to reporting variability in {\LiParams}; dynamic noise allows a better fit to the data, as documented formally in Table~{\MainResultsTable} and apparent from Figure~{\MainFigSimulations}.
 
 
 The dataset analyzed by \citet{li20} included 375 cities, but we study only 373.
@@ -1606,7 +1343,7 @@ Here, we use two benchmarks:
 
 \noindent (i) A negative binomial model which is independent and identically distributed (IID) for each time point with a unit, with a unit-specific mean. We parameterize the model in terms of its mean and variance, as
 \begin{equation}
-\E[Y_{u,n}]=\mu_u\quad\text{and}\quad \var{Y_{u,n}} = \mu_u + \mu_u^2/s,
+\E[Y_{u,n}]=\mu_u\quad\text{and}\quad \var[Y_{u,n}] = \mu_u + \mu_u^2/s,
 \end{equation}
 where $s$ is a scale parameter.
 
@@ -1619,14 +1356,41 @@ with the convention that $Y_{u,0}=0$.
 We did not adopt the previously used log-ARMA benchmark, because it is inappropriate for count data with many zeros.
 The likelihood was optimized using \code{optim} in R.
 
+%%%%%%%%%%%% Review of inference methods %%%%%%%%%%%%%%
+
+\section{\secSep Review of inference methods for metapopulation models}
+\label{sec:review}
+
+Viewing metapopulation models as high-dimensional structured population models, we consider the scalability of techniques developed for inferring population dynamics at a single location reviewed by \cite{funk20} and \cite{auger-methe21}.
+These methods account for the nonlinear, stochastic, partially observed nature of biological dynamics available within the general class of POMP models.
+Commonly implemented inference approaches for POMP models can be categorized as  (i) variants of MCMC; (ii) matching summary statistics between data and simulations; (iii)  linearization;   (iv) particle filters (i.e., sequential Monte Carlo).
+We consider each of these in turn.
+
+In principle, MCMC techniques enable Bayesian inference or maximum likelihood via expectation-maximization algorithms \cite{cappe05}.
+In practice, successful MCMC for metapopulation models requires careful model-specific algorithm development \cite{whitehouse23}.
+
+Matching summary statistics of simulations to the corresponding data statistic is, in principle, a readily applicable inference approach for a wide class of models including metapopulation models.
+In the context of Bayesian inference this is called Approximate Bayesian Computing \cite{conlan12}.
+However, informative, low-dimensional summary statistics can be hard to construct even for low-dimensional nonlinear systems.
+This can make summary statistic methods statistically inefficient \cite{fasiolo16}.
+This approach is practical when there is a small number of parameters to estimate and a large amount of data, in which case statistical efficiency may not be a concern.
+
+Population dynamics may be approximately linear on a log scale, and this has been used to develop linearization methods for epidemiological time series analysis \cite{bjornstad02} that have been extended to metapopulation analysis \cite{xia04}.
+This provides a numerically convenient set of tools, but requires scientists to work within a limited class of models.
+
+Particle filter methods can provide statistically efficient inference for general POMP models but do not scale well with the dimension of the system.
+This has led to the development of the block particle filter (BPF), described further in Section~\ref{sec:bpfilter}, and the ensemble Kalman filter (EnKF), discussed in Section~\ref{sec:enkf}.
+
 %%%%%%%%%%%%%%%%%%%%%%%%% bpfilter and ibpf %%%%%%%%%%%%%%%%%%%%%%
 
 \section{\secSep The block particle filter and iterated block particle filter}
 \label{sec:bpfilter}
 
-We use the block particle filter of \citet{rebeschini15} implemented as \code{bpfilter} in the \pkg{spatPomp} package \citep{asfaw23arxiv}.
+In Figure~{\mainFigIBPF} of the main text, we described BPF and the iterated block particle filter (IBPF). 
+This section adds additional details on our implementation of these methods. 
+We use the BPF of \citet{rebeschini15} implemented as \code{bpfilter} in the \pkg{spatPomp} package \citep{asfaw23arxiv}.
 A filter can evaluate the likelihood function but is not directly concerned with parameter estimation.
-Iterated block particle filters for parameter estimation were developed by \citet{ning23} and \citet{ionides22} and are implemented as \code{ibpf} in \pkg{spatPomp}.
+IBPF algorithms extending BPF to enable parameter estimation were developed by \citet{ning23} and \citet{ionides22} and are implemented as \code{ibpf} in \pkg{spatPomp}.
 Here, we give in informal introduction to \code{bpfilter} and \code{ibpf}.
 
 The particle filter \citep{arulampalam02,doucet11} can be heuristically understood as Darwinian evolution operating on a swarm of particles.
@@ -1634,70 +1398,6 @@ Between consecutive observation times, each particle follows a random trajectory
 This randomness is analogous to Darwinian mutation.
 At an observation time, the particles are resamples with weights corresponding to the conditional density of the data given the location of the particle.
 The weights are Darwinian fitness, and the resampling is Darwinian natural selection.
-
-
-\begin{figure}[!ht]
-\begin{center}
-\begin{tikzpicture}[
-  square/.style={rectangle, draw=black, minimum width=5.5cm, minimum height=0.7cm, rounded corners=.1cm,font=\ttfamily},
-  block/.style={rectangle, draw=black, minimum width=1.5cm, align=center, rounded corners=.1cm,font=\ttfamily},
-  >/.style={shorten >=0.4mm}, % redefine arrow to stop short of node
-  >/.tip={Stealth[length=2.5mm,width=1.5mm]} % redefine arrow style
-]
-\tikzset{>={}}; % this is needed to implement the arrow redefinition
-  \node (initialize)   at (0,7.3)  [square] {Initialize model \& parameters};
-  \node (perturb)    at (0,6) [square,fill=blue!8] {Perturb parameters};
-  
-  \node (predict)  at (0,4.7)  [square] {Predict:~stochastic dynamics};
-  
-  \node (reweight1) at (-3,3)  [block] {Reweight \\ Block 1};
-  \node (reweight2) at (-1,3)  [block] {Reweight\\ Block 2};
-  \node (reweight3) at (1,3) {\texttt{...}};
-  \node (reweightK) at (3,3)  [block] {Reweight\\ Block K};
-
-  \node (resample1) at (-3,1.5)  [block] {Resample\\state};
-  \node (resample2) at (-1,1.5)  [block] {Resample\\ state};
-  \node (resampleK) at (3,1.5)  [block] {Resample\\ state};
-
-  \node (resample3) at (1,1) {\texttt{...}};
-
-  \node (params1) at (-3,0.5)  [block, fill=blue!8] {Resample\\ params};
-  \node (params2) at (-1,0.5)  [block, fill=blue!8] {Resample\\ params};
-  \node (paramsK) at (3,0.5)  [block, fill=blue!8] {Resample\\ params};
-
-  \node (recombine) at (0,-1.2)  [square] {Recombine};
-
-  \node (N) at (5.5,3)  [draw,diamond,aspect=1.5] {\texttt{n=1:N}};
-  \node (M) at (7.5,3)  [draw,diamond,aspect=1.5,fill=blue!8] {\texttt{m=1:M}};
-  \node (mysouth) at (0,-1.8) {};
-
-  \draw[->] (initialize.south) -- (perturb.north);
-  \draw[->] (perturb.south) -- (predict.north);
-  \draw[->] (predict) -- (reweight1.north);
-  \draw[->] (predict) -- (reweight2.north);
-  \draw[->] (predict) -- (reweightK.north);
-  \draw[->] (reweight1) -- (resample1);
-  \draw[->] (reweight2) -- (resample2);
-  \draw[->] (reweightK) -- (resampleK);
-  
-  \draw[->] (params1.south) -- (recombine);
-  \draw[->] (params2.south) -- (recombine);
-  \draw[->] (paramsK.south) -- (recombine);
-  \draw[->] (recombine.east) -- (recombine -| N) -- (N);
-  \draw[->] (N) -- (perturb -| N) -- (perturb); 
-  \draw[->] (recombine.south) -- (mysouth -| recombine.south) -- (mysouth -| M) -- (M);
- \draw[->] (M) -- (initialize -| M) -- (initialize);
-\end{tikzpicture}
-
-\end{center}
-\caption{A flow diagram for an iterated block particle filter. The outer loop ($m=1,\dots,M$) enables parameter estimation, when combined with the perturbation and resampling of the parameters.} \label{fig:ibpf}
-\end{figure}
-
-
-Iterated filtering algorithms add perturbations to the parameters of each particle.
-Thus, the natural selection of particles favors parameter values consistent with the data, giving rise to algorithms that approach the maximum likelihood estimate \citep{ionides06,ionides15}.
-A diagram representing an iterated block particle filter is showh in Figure~\ref{fig:ibpf}.
-
 
 The performance of particle filters decays rapidly with the dimension of the latent state \citep{bengtsson08}.
 Iterated particle filters suffer from the same curse of dimensionality.
@@ -1786,7 +1486,7 @@ We discuss separately these two requirements for success of IBPF.
 
 BPF has good scalability properties, but an approximation error which can be large when the model is not a good match for the method.
 The theory within which BPF has small approximation error assumes that dependence decays suitably quickly with distance between units \citep{rebeschini15}.
-The theory for IBPF, in the case where all parameters are unit-specific, has a similar requirement, but on an extended model where the latent state at each unit is augmented with a parameter vector carrying out a random walk.
+The theory for IBPF, in the case where all parameters are unit-specific, has a similar requirement, but on an extended model where the latent state at each unit is augmented with a parameter vector carrying out a random walk \citep{ning23}.
 There is not yet a comparable theory for the shared parameter extension of IBPF proposed and demonstrated by \citet{ionides22}, but a similar requirement is probably needed.
 
 The size of an initial infected population at a single source unit, Wuhan for COVID-19, is an example of a potentially problematic parameter to estimate via IBPF.
